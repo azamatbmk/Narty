@@ -1,8 +1,19 @@
 {
 	"FileVersion": 3,
-	"EngineAssociation": "{988DDBBE-468F-34F6-3957-468971A32F23}",
+	"EngineAssociation": "5.8",
 	"Category": "",
 	"Description": "",
+	"Modules": [
+		{
+			"Name": "Narty",
+			"Type": "Runtime",
+			"LoadingPhase": "Default",
+			"AdditionalDependencies": [
+				"Engine",
+				"UMG"
+			]
+		}
+	],
 	"Plugins": [
 		{
 			"Name": "ModelingToolsEditorMode",
