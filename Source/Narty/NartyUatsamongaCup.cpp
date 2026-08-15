@@ -7,6 +7,7 @@
 #include "Components/PointLightComponent.h"
 #include "Components/BoxComponent.h"
 #include "Components/TextRenderComponent.h"
+#include "Components/InputComponent.h"
 #include "UObject/ConstructorHelpers.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/PlayerController.h"
@@ -73,6 +74,7 @@ void ANartyUatsamongaCup::BeginPlay()
 {
 	Super::BeginPlay();
 	Trigger->OnComponentBeginOverlap.AddDynamic(this, &ANartyUatsamongaCup::OnCupOverlap);
+	Trigger->OnComponentEndOverlap.AddDynamic(this, &ANartyUatsamongaCup::OnCupEndOverlap);
 }
 
 void ANartyUatsamongaCup::Tick(float DeltaSeconds)
@@ -128,7 +130,7 @@ void ANartyUatsamongaCup::OnCupOverlap(
 	bool bFromSweep,
 	const FHitResult& SweepResult)
 {
-	if (!bQuestActive || bJudged || bDialogOpen)
+	if (!bQuestActive || bJudged)
 	{
 		return;
 	}
@@ -145,13 +147,66 @@ void ANartyUatsamongaCup::OnCupOverlap(
 		return;
 	}
 
-	OpenJudgment(Character);
+	InsideCharacter = Character;
+	BindInteractInput(Character);
+
+	if (!bDialogOpen)
+	{
+		OpenJudgment(Character);
+	}
+}
+
+void ANartyUatsamongaCup::OnCupEndOverlap(
+	UPrimitiveComponent* OverlappedComponent,
+	AActor* OtherActor,
+	UPrimitiveComponent* OtherComp,
+	int32 OtherBodyIndex)
+{
+	if (OtherActor == InsideCharacter.Get())
+	{
+		InsideCharacter = nullptr;
+	}
+}
+
+void ANartyUatsamongaCup::BindInteractInput(ACharacter* Character)
+{
+	if (bInteractBound || !Character)
+	{
+		return;
+	}
+
+	APlayerController* PC = Cast<APlayerController>(Character->GetController());
+	UInputComponent* IC = Character->InputComponent;
+	if (!IC && PC)
+	{
+		IC = PC->InputComponent;
+	}
+	if (!IC)
+	{
+		return;
+	}
+
+	IC->BindKey(EKeys::E, IE_Pressed, this, &ANartyUatsamongaCup::HandleInteractPressed);
+	bInteractBound = true;
+}
+
+void ANartyUatsamongaCup::HandleInteractPressed()
+{
+	if (!bQuestActive || bJudged || bDialogOpen)
+	{
+		return;
+	}
+
+	if (ACharacter* Character = InsideCharacter.Get())
+	{
+		OpenJudgment(Character);
+	}
 }
 
 void ANartyUatsamongaCup::OpenJudgment(ACharacter* Character)
 {
-	APlayerController* PC = Cast<APlayerController>(Character->GetController());
-	if (!PC)
+	APlayerController* PC = Character ? Cast<APlayerController>(Character->GetController()) : nullptr;
+	if (!PC || bDialogOpen || bJudged)
 	{
 		return;
 	}

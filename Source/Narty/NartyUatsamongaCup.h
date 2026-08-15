@@ -38,14 +38,25 @@ protected:
 		const FHitResult& SweepResult);
 
 	UFUNCTION()
+	void OnCupEndOverlap(
+		UPrimitiveComponent* OverlappedComponent,
+		AActor* OtherActor,
+		UPrimitiveComponent* OtherComp,
+		int32 OtherBodyIndex);
+
+	UFUNCTION()
 	void HandleChoice(int32 ChoiceIndex);
 
 	UFUNCTION()
 	void HandleClosed();
 
+	UFUNCTION()
+	void HandleInteractPressed();
+
 	void OpenJudgment(ACharacter* Character);
 	void CloseDialog();
 	void ResolveChoice(int32 ChoiceIndex);
+	void BindInteractInput(ACharacter* Character);
 
 	UPROPERTY(VisibleAnywhere)
 	TObjectPtr<UStaticMeshComponent> Table;
@@ -68,6 +79,9 @@ protected:
 	UPROPERTY()
 	TWeakObjectPtr<ACharacter> InteractingCharacter;
 
+	UPROPERTY()
+	TWeakObjectPtr<ACharacter> InsideCharacter;
+
 	/** ChoiceIndex -> is truth */
 	TArray<bool> ChoiceIsTruth;
 
@@ -75,5 +89,6 @@ protected:
 	bool bDialogOpen = false;
 	bool bJudged = false;
 	bool bBoiling = false;
+	bool bInteractBound = false;
 	float BoilTime = 0.f;
 };

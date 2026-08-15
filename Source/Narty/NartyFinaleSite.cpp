@@ -7,6 +7,7 @@
 #include "Components/PointLightComponent.h"
 #include "Components/BoxComponent.h"
 #include "Components/TextRenderComponent.h"
+#include "Components/InputComponent.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "UObject/ConstructorHelpers.h"
 #include "GameFramework/Character.h"
@@ -71,6 +72,7 @@ void ANartyFinaleSite::BeginPlay()
 {
 	Super::BeginPlay();
 	Trigger->OnComponentBeginOverlap.AddDynamic(this, &ANartyFinaleSite::OnSanctumOverlap);
+	Trigger->OnComponentEndOverlap.AddDynamic(this, &ANartyFinaleSite::OnSanctumEndOverlap);
 }
 
 void ANartyFinaleSite::Tick(float DeltaSeconds)
@@ -121,7 +123,7 @@ void ANartyFinaleSite::OnSanctumOverlap(
 	bool bFromSweep,
 	const FHitResult& SweepResult)
 {
-	if (!bActive || bResolved || bDialogOpen)
+	if (!bActive || bResolved)
 	{
 		return;
 	}
@@ -138,13 +140,66 @@ void ANartyFinaleSite::OnSanctumOverlap(
 		return;
 	}
 
-	OpenSatana(Character);
+	InsideCharacter = Character;
+	BindInteractInput(Character);
+
+	if (!bDialogOpen)
+	{
+		OpenSatana(Character);
+	}
+}
+
+void ANartyFinaleSite::OnSanctumEndOverlap(
+	UPrimitiveComponent* OverlappedComponent,
+	AActor* OtherActor,
+	UPrimitiveComponent* OtherComp,
+	int32 OtherBodyIndex)
+{
+	if (OtherActor == InsideCharacter.Get())
+	{
+		InsideCharacter = nullptr;
+	}
+}
+
+void ANartyFinaleSite::BindInteractInput(ACharacter* Character)
+{
+	if (bInteractBound || !Character)
+	{
+		return;
+	}
+
+	APlayerController* PC = Cast<APlayerController>(Character->GetController());
+	UInputComponent* IC = Character->InputComponent;
+	if (!IC && PC)
+	{
+		IC = PC->InputComponent;
+	}
+	if (!IC)
+	{
+		return;
+	}
+
+	IC->BindKey(EKeys::E, IE_Pressed, this, &ANartyFinaleSite::HandleInteractPressed);
+	bInteractBound = true;
+}
+
+void ANartyFinaleSite::HandleInteractPressed()
+{
+	if (!bActive || bResolved || bDialogOpen)
+	{
+		return;
+	}
+
+	if (ACharacter* Character = InsideCharacter.Get())
+	{
+		OpenSatana(Character);
+	}
 }
 
 void ANartyFinaleSite::OpenSatana(ACharacter* Character)
 {
-	APlayerController* PC = Cast<APlayerController>(Character->GetController());
-	if (!PC)
+	APlayerController* PC = Character ? Cast<APlayerController>(Character->GetController()) : nullptr;
+	if (!PC || bDialogOpen || bResolved)
 	{
 		return;
 	}

@@ -7,6 +7,7 @@
 #include "Components/PointLightComponent.h"
 #include "Components/BoxComponent.h"
 #include "Components/TextRenderComponent.h"
+#include "Components/InputComponent.h"
 #include "UObject/ConstructorHelpers.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/PlayerController.h"
@@ -63,6 +64,7 @@ void ANartyMountainFireActor::BeginPlay()
 {
 	Super::BeginPlay();
 	Trigger->OnComponentBeginOverlap.AddDynamic(this, &ANartyMountainFireActor::OnFireOverlap);
+	Trigger->OnComponentEndOverlap.AddDynamic(this, &ANartyMountainFireActor::OnFireEndOverlap);
 }
 
 void ANartyMountainFireActor::Tick(float DeltaSeconds)
@@ -151,7 +153,7 @@ void ANartyMountainFireActor::OnFireOverlap(
 	bool bFromSweep,
 	const FHitResult& SweepResult)
 {
-	if (!bQuestActive || bFireTaken || bDialogOpen)
+	if (!bQuestActive || bFireTaken)
 	{
 		return;
 	}
@@ -168,11 +170,69 @@ void ANartyMountainFireActor::OnFireOverlap(
 		return;
 	}
 
-	TryTakeFire(Character);
+	InsideCharacter = Character;
+	BindInteractInput(Character);
+
+	if (!bDialogOpen)
+	{
+		TryTakeFire(Character);
+	}
+}
+
+void ANartyMountainFireActor::OnFireEndOverlap(
+	UPrimitiveComponent* OverlappedComponent,
+	AActor* OtherActor,
+	UPrimitiveComponent* OtherComp,
+	int32 OtherBodyIndex)
+{
+	if (OtherActor == InsideCharacter.Get())
+	{
+		InsideCharacter = nullptr;
+	}
+}
+
+void ANartyMountainFireActor::BindInteractInput(ACharacter* Character)
+{
+	if (bInteractBound || !Character)
+	{
+		return;
+	}
+
+	APlayerController* PC = Cast<APlayerController>(Character->GetController());
+	UInputComponent* IC = Character->InputComponent;
+	if (!IC && PC)
+	{
+		IC = PC->InputComponent;
+	}
+	if (!IC)
+	{
+		return;
+	}
+
+	IC->BindKey(EKeys::E, IE_Pressed, this, &ANartyMountainFireActor::HandleInteractPressed);
+	bInteractBound = true;
+}
+
+void ANartyMountainFireActor::HandleInteractPressed()
+{
+	if (!bQuestActive || bFireTaken || bDialogOpen)
+	{
+		return;
+	}
+
+	if (ACharacter* Character = InsideCharacter.Get())
+	{
+		TryTakeFire(Character);
+	}
 }
 
 void ANartyMountainFireActor::TryTakeFire(ACharacter* Character)
 {
+	if (!Character || bFireTaken || bDialogOpen)
+	{
+		return;
+	}
+
 	UNartyGameInstance* GI = Cast<UNartyGameInstance>(UGameplayStatics::GetGameInstance(this));
 	const ENartyHero Hero = GI ? GI->GetSelectedHero() : ENartyHero::None;
 
@@ -212,8 +272,8 @@ bool ANartyMountainFireActor::AreGuardiansDefeated() const
 
 void ANartyMountainFireActor::OpenBargainDialog(ACharacter* Character)
 {
-	APlayerController* PC = Cast<APlayerController>(Character->GetController());
-	if (!PC)
+	APlayerController* PC = Character ? Cast<APlayerController>(Character->GetController()) : nullptr;
+	if (!PC || bDialogOpen || bFireTaken)
 	{
 		return;
 	}

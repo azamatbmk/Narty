@@ -8,6 +8,7 @@
 #include "Components/PointLightComponent.h"
 #include "Components/BoxComponent.h"
 #include "Components/TextRenderComponent.h"
+#include "Components/InputComponent.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "UObject/ConstructorHelpers.h"
 #include "GameFramework/Character.h"
@@ -62,6 +63,7 @@ void ANartyHeroTrialSite::BeginPlay()
 {
 	Super::BeginPlay();
 	GateTrigger->OnComponentBeginOverlap.AddDynamic(this, &ANartyHeroTrialSite::OnGateOverlap);
+	GateTrigger->OnComponentEndOverlap.AddDynamic(this, &ANartyHeroTrialSite::OnGateEndOverlap);
 }
 
 void ANartyHeroTrialSite::ActivateForHero(ENartyHero Hero)
@@ -220,7 +222,7 @@ void ANartyHeroTrialSite::OnGateOverlap(
 	bool bFromSweep,
 	const FHitResult& SweepResult)
 {
-	if (!bActive || bCompleted || bDialogOpen)
+	if (!bActive || bCompleted)
 	{
 		return;
 	}
@@ -237,7 +239,57 @@ void ANartyHeroTrialSite::OnGateOverlap(
 		return;
 	}
 
-	if (!bEntered)
+	InsideGateCharacter = Character;
+	BindInteractInput(Character);
+
+	if (!bEntered && !bDialogOpen)
+	{
+		OpenIntro(Character);
+	}
+}
+
+void ANartyHeroTrialSite::OnGateEndOverlap(
+	UPrimitiveComponent* OverlappedComponent,
+	AActor* OtherActor,
+	UPrimitiveComponent* OtherComp,
+	int32 OtherBodyIndex)
+{
+	if (OtherActor == InsideGateCharacter.Get())
+	{
+		InsideGateCharacter = nullptr;
+	}
+}
+
+void ANartyHeroTrialSite::BindInteractInput(ACharacter* Character)
+{
+	if (bInteractBound || !Character)
+	{
+		return;
+	}
+
+	APlayerController* PC = Cast<APlayerController>(Character->GetController());
+	UInputComponent* IC = Character->InputComponent;
+	if (!IC && PC)
+	{
+		IC = PC->InputComponent;
+	}
+	if (!IC)
+	{
+		return;
+	}
+
+	IC->BindKey(EKeys::E, IE_Pressed, this, &ANartyHeroTrialSite::HandleInteractPressed);
+	bInteractBound = true;
+}
+
+void ANartyHeroTrialSite::HandleInteractPressed()
+{
+	if (!bActive || bCompleted || bEntered || bDialogOpen)
+	{
+		return;
+	}
+
+	if (ACharacter* Character = InsideGateCharacter.Get())
 	{
 		OpenIntro(Character);
 	}
@@ -245,8 +297,8 @@ void ANartyHeroTrialSite::OnGateOverlap(
 
 void ANartyHeroTrialSite::OpenIntro(ACharacter* Character)
 {
-	APlayerController* PC = Cast<APlayerController>(Character->GetController());
-	if (!PC)
+	APlayerController* PC = Character ? Cast<APlayerController>(Character->GetController()) : nullptr;
+	if (!PC || bDialogOpen || bCompleted || bEntered)
 	{
 		return;
 	}

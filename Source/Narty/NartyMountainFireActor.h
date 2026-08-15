@@ -37,16 +37,27 @@ protected:
 		const FHitResult& SweepResult);
 
 	UFUNCTION()
+	void OnFireEndOverlap(
+		UPrimitiveComponent* OverlappedComponent,
+		AActor* OtherActor,
+		UPrimitiveComponent* OtherComp,
+		int32 OtherBodyIndex);
+
+	UFUNCTION()
 	void HandleBargainAccepted();
 
 	UFUNCTION()
 	void HandleBargainClosed();
+
+	UFUNCTION()
+	void HandleInteractPressed();
 
 	void TryTakeFire(ACharacter* Character);
 	void GiveFireToPlayer(ACharacter* Character);
 	bool AreGuardiansDefeated() const;
 	void OpenBargainDialog(ACharacter* Character);
 	void RetryTakeForOverlappingPlayers();
+	void BindInteractInput(ACharacter* Character);
 
 	UFUNCTION()
 	void OnGuardianDefeated(AActor* DestroyedActor);
@@ -75,7 +86,11 @@ protected:
 	UPROPERTY()
 	TWeakObjectPtr<ACharacter> InteractingCharacter;
 
+	UPROPERTY()
+	TWeakObjectPtr<ACharacter> InsideCharacter;
+
 	bool bQuestActive = false;
 	bool bFireTaken = false;
 	bool bDialogOpen = false;
+	bool bInteractBound = false;
 };

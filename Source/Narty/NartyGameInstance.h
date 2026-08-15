@@ -8,6 +8,7 @@
 
 class UNartyHeroSelectWidget;
 class UNartyObjectiveWidget;
+class UNartyEndingWidget;
 class APlayerController;
 class ACharacter;
 class ANartyPrototypeArena;
@@ -20,6 +21,7 @@ class NARTY_API UNartyGameInstance : public UGameInstance
 
 public:
 	virtual void OnStart() override;
+	virtual void LoadComplete(const float LoadTime, const FString& MapName) override;
 
 	UFUNCTION(BlueprintCallable, Category = "Narty|Hero")
 	void SetSelectedHero(ENartyHero Hero);
@@ -81,9 +83,15 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Narty|Quest")
 	ENartyQuestStage GetQuestStage() const { return QuestStage; }
 
+	UFUNCTION(BlueprintCallable, Category = "Narty|Quest")
+	void RestartCampaign();
+
 protected:
 	UFUNCTION()
 	void HandleHeroChosen(ENartyHero Hero);
+
+	UFUNCTION()
+	void HandlePlayAgain();
 
 	void ShowHeroSelectMenu();
 	void HideHeroSelectMenu();
@@ -92,6 +100,10 @@ protected:
 	void BootstrapPrototype();
 	void EnsureObjectiveWidget();
 	void UpdateObjectiveUI();
+	void ShowEndingScreen(ENartyEnding Ending);
+	void HideEndingScreen();
+	void ResetCampaignState();
+	void GetEndingTexts(ENartyEnding Ending, FText& OutTitle, FText& OutBody) const;
 	FText GetHeroFireHint() const;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Narty|Hero")
@@ -122,9 +134,14 @@ protected:
 	TObjectPtr<UNartyObjectiveWidget> ObjectiveWidget;
 
 	UPROPERTY()
+	TObjectPtr<UNartyEndingWidget> EndingWidget;
+
+	UPROPERTY()
 	TObjectPtr<ANartyPrototypeArena> PrototypeArena;
 
 	FTimerHandle HeroSelectRetryHandle;
 	FTimerHandle ArenaRetryHandle;
 	FTimerHandle ApplyHeroRetryHandle;
+
+	bool bRestartPending = false;
 };

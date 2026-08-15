@@ -32,13 +32,24 @@ protected:
 		const FHitResult& SweepResult);
 
 	UFUNCTION()
+	void OnForgeEndOverlap(
+		UPrimitiveComponent* OverlappedComponent,
+		AActor* OtherActor,
+		UPrimitiveComponent* OtherComp,
+		int32 OtherBodyIndex);
+
+	UFUNCTION()
 	void HandleDialogAccepted();
 
 	UFUNCTION()
 	void HandleDialogClosed();
 
+	UFUNCTION()
+	void HandleInteractPressed();
+
 	void OpenDialog(ACharacter* Character);
 	void CloseDialog();
+	void BindInteractInput(ACharacter* Character);
 
 	UPROPERTY(VisibleAnywhere)
 	TObjectPtr<UStaticMeshComponent> BaseMesh;
@@ -61,6 +72,10 @@ protected:
 	UPROPERTY()
 	TWeakObjectPtr<ACharacter> InteractingCharacter;
 
+	UPROPERTY()
+	TWeakObjectPtr<ACharacter> InsideCharacter;
+
 	bool bWeaponGranted = false;
 	bool bDialogOpen = false;
+	bool bInteractBound = false;
 };

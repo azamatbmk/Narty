@@ -39,6 +39,13 @@ protected:
 		const FHitResult& SweepResult);
 
 	UFUNCTION()
+	void OnSanctumEndOverlap(
+		UPrimitiveComponent* OverlappedComponent,
+		AActor* OtherActor,
+		UPrimitiveComponent* OtherComp,
+		int32 OtherBodyIndex);
+
+	UFUNCTION()
 	void HandleSatanaAccepted();
 
 	UFUNCTION()
@@ -50,12 +57,16 @@ protected:
 	UFUNCTION()
 	void HandleEndingClosed();
 
+	UFUNCTION()
+	void HandleInteractPressed();
+
 	void BuildSanctum();
 	void OpenSatana(ACharacter* Character);
 	void OpenEndingChoice(ACharacter* Character);
 	void CloseDialogs();
 	void ResolveEnding(int32 ChoiceIndex);
 	void PlayEndingVisual(ENartyEnding Ending);
+	void BindInteractInput(ACharacter* Character);
 
 	UPROPERTY(VisibleAnywhere)
 	TObjectPtr<USceneComponent> Root;
@@ -90,9 +101,13 @@ protected:
 	UPROPERTY()
 	TWeakObjectPtr<ACharacter> InteractingCharacter;
 
+	UPROPERTY()
+	TWeakObjectPtr<ACharacter> InsideCharacter;
+
 	bool bActive = false;
 	bool bDialogOpen = false;
 	bool bResolved = false;
 	bool bStorm = false;
+	bool bInteractBound = false;
 	float StormTime = 0.f;
 };

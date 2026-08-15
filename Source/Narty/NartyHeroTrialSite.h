@@ -39,6 +39,13 @@ protected:
 		const FHitResult& SweepResult);
 
 	UFUNCTION()
+	void OnGateEndOverlap(
+		UPrimitiveComponent* OverlappedComponent,
+		AActor* OtherActor,
+		UPrimitiveComponent* OtherComp,
+		int32 OtherBodyIndex);
+
+	UFUNCTION()
 	void OnVisionOverlap(
 		UPrimitiveComponent* OverlappedComponent,
 		AActor* OtherActor,
@@ -59,6 +66,9 @@ protected:
 	UFUNCTION()
 	void HandleIntroClosed();
 
+	UFUNCTION()
+	void HandleInteractPressed();
+
 	void BuildSharedShell();
 	void SetupSoslanTrial();
 	void SetupBatrazTrial();
@@ -69,6 +79,7 @@ protected:
 	void CloseAnyDialog();
 	void CompleteTrial(bool bNoblePath);
 	void CheckBatrazCleared();
+	void BindInteractInput(ACharacter* Character);
 	UStaticMeshComponent* AddBlock(const FName& Name, const FVector& RelLoc, const FVector& Scale, const FLinearColor& Color);
 	UBoxComponent* AddTrigger(const FName& Name, const FVector& RelLoc, const FVector& Extent, int32 VisionIndex);
 
@@ -102,12 +113,16 @@ protected:
 	UPROPERTY()
 	TWeakObjectPtr<ACharacter> InteractingCharacter;
 
+	UPROPERTY()
+	TWeakObjectPtr<ACharacter> InsideGateCharacter;
+
 	ENartyHero ActiveHero = ENartyHero::None;
 	bool bActive = false;
 	bool bEntered = false;
 	bool bCompleted = false;
 	bool bDialogOpen = false;
 	bool bShellBuilt = false;
+	bool bInteractBound = false;
 	int32 VisionsSeen = 0;
 	int32 SyrdonDeals = 0;
 	FTimerHandle BatrazCheckHandle;

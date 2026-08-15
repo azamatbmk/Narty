@@ -8,6 +8,7 @@
 #include "Components/PointLightComponent.h"
 #include "Components/BoxComponent.h"
 #include "Components/TextRenderComponent.h"
+#include "Components/InputComponent.h"
 #include "UObject/ConstructorHelpers.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/PlayerController.h"
@@ -61,6 +62,7 @@ void ANartyForgeActor::BeginPlay()
 {
 	Super::BeginPlay();
 	InteractTrigger->OnComponentBeginOverlap.AddDynamic(this, &ANartyForgeActor::OnForgeOverlap);
+	InteractTrigger->OnComponentEndOverlap.AddDynamic(this, &ANartyForgeActor::OnForgeEndOverlap);
 }
 
 void ANartyForgeActor::OnForgeOverlap(
@@ -72,7 +74,7 @@ void ANartyForgeActor::OnForgeOverlap(
 	const FHitResult& SweepResult)
 {
 	ACharacter* Character = Cast<ACharacter>(OtherActor);
-	if (!Character || bDialogOpen)
+	if (!Character)
 	{
 		return;
 	}
@@ -83,13 +85,66 @@ void ANartyForgeActor::OnForgeOverlap(
 		return;
 	}
 
-	OpenDialog(Character);
+	InsideCharacter = Character;
+	BindInteractInput(Character);
+
+	if (!bDialogOpen)
+	{
+		OpenDialog(Character);
+	}
+}
+
+void ANartyForgeActor::OnForgeEndOverlap(
+	UPrimitiveComponent* OverlappedComponent,
+	AActor* OtherActor,
+	UPrimitiveComponent* OtherComp,
+	int32 OtherBodyIndex)
+{
+	if (OtherActor == InsideCharacter.Get())
+	{
+		InsideCharacter = nullptr;
+	}
+}
+
+void ANartyForgeActor::BindInteractInput(ACharacter* Character)
+{
+	if (bInteractBound || !Character)
+	{
+		return;
+	}
+
+	APlayerController* PC = Cast<APlayerController>(Character->GetController());
+	UInputComponent* IC = Character->InputComponent;
+	if (!IC && PC)
+	{
+		IC = PC->InputComponent;
+	}
+	if (!IC)
+	{
+		return;
+	}
+
+	IC->BindKey(EKeys::E, IE_Pressed, this, &ANartyForgeActor::HandleInteractPressed);
+	bInteractBound = true;
+}
+
+void ANartyForgeActor::HandleInteractPressed()
+{
+	if (bDialogOpen)
+	{
+		return;
+	}
+
+	if (ACharacter* Character = InsideCharacter.Get())
+	{
+		OpenDialog(Character);
+	}
 }
 
 void ANartyForgeActor::OpenDialog(ACharacter* Character)
 {
 	APlayerController* PC = Character ? Cast<APlayerController>(Character->GetController()) : nullptr;
-	if (!PC)
+	if (!PC || bDialogOpen)
 	{
 		return;
 	}
@@ -97,7 +152,7 @@ void ANartyForgeActor::OpenDialog(ACharacter* Character)
 	InteractingCharacter = Character;
 	bDialogOpen = true;
 
-	if (!DialogWidget)
+	if (!IsValid(DialogWidget))
 	{
 		DialogWidget = CreateWidget<UNartyForgeDialogWidget>(PC, UNartyForgeDialogWidget::StaticClass());
 		if (DialogWidget)
@@ -171,7 +226,7 @@ void ANartyForgeActor::OpenDialog(ACharacter* Character)
 
 void ANartyForgeActor::CloseDialog()
 {
-	if (DialogWidget)
+	if (IsValid(DialogWidget))
 	{
 		DialogWidget->RemoveFromParent();
 	}
