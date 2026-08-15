@@ -3,11 +3,11 @@
 #include "NartyForgeDialogWidget.h"
 #include "NartyChoiceDialogWidget.h"
 #include "NartyGameInstance.h"
+#include "NartyInteractComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/PointLightComponent.h"
 #include "Components/BoxComponent.h"
 #include "Components/TextRenderComponent.h"
-#include "Components/InputComponent.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "UObject/ConstructorHelpers.h"
 #include "GameFramework/Character.h"
@@ -141,11 +141,21 @@ void ANartyFinaleSite::OnSanctumOverlap(
 	}
 
 	InsideCharacter = Character;
-	BindInteractInput(Character);
+	if (UNartyInteractComponent* Interact = UNartyInteractComponent::EnsureOn(Character))
+	{
+		Interact->PushInteractTarget(this);
+	}
 
 	if (!bDialogOpen)
 	{
-		OpenSatana(Character);
+		if (bAwaitingEndingChoice)
+		{
+			OpenEndingChoice(Character);
+		}
+		else
+		{
+			OpenSatana(Character);
+		}
 	}
 }
 
@@ -159,38 +169,33 @@ void ANartyFinaleSite::OnSanctumEndOverlap(
 	{
 		InsideCharacter = nullptr;
 	}
+
+	if (ACharacter* Character = Cast<ACharacter>(OtherActor))
+	{
+		if (UNartyInteractComponent* Interact = Character->FindComponentByClass<UNartyInteractComponent>())
+		{
+			Interact->PopInteractTarget(this);
+		}
+	}
 }
 
-void ANartyFinaleSite::BindInteractInput(ACharacter* Character)
+bool ANartyFinaleSite::CanNartyInteract() const
 {
-	if (bInteractBound || !Character)
-	{
-		return;
-	}
-
-	APlayerController* PC = Cast<APlayerController>(Character->GetController());
-	UInputComponent* IC = Character->InputComponent;
-	if (!IC && PC)
-	{
-		IC = PC->InputComponent;
-	}
-	if (!IC)
-	{
-		return;
-	}
-
-	IC->BindKey(EKeys::E, IE_Pressed, this, &ANartyFinaleSite::HandleInteractPressed);
-	bInteractBound = true;
+	return bActive && !bResolved && InsideCharacter.IsValid() && !bDialogOpen;
 }
 
-void ANartyFinaleSite::HandleInteractPressed()
+void ANartyFinaleSite::TryNartyInteract(ACharacter* Character)
 {
-	if (!bActive || bResolved || bDialogOpen)
+	if (!Character || !CanNartyInteract())
 	{
 		return;
 	}
 
-	if (ACharacter* Character = InsideCharacter.Get())
+	if (bAwaitingEndingChoice)
+	{
+		OpenEndingChoice(Character);
+	}
+	else
 	{
 		OpenSatana(Character);
 	}
@@ -252,6 +257,7 @@ void ANartyFinaleSite::OpenSatana(ACharacter* Character)
 void ANartyFinaleSite::HandleSatanaAccepted()
 {
 	CloseDialogs();
+	bAwaitingEndingChoice = true;
 	if (ACharacter* Character = InteractingCharacter.Get())
 	{
 		OpenEndingChoice(Character);
@@ -265,14 +271,15 @@ void ANartyFinaleSite::HandleSatanaClosed()
 
 void ANartyFinaleSite::OpenEndingChoice(ACharacter* Character)
 {
-	APlayerController* PC = Cast<APlayerController>(Character->GetController());
-	if (!PC || bResolved)
+	APlayerController* PC = Character ? Cast<APlayerController>(Character->GetController()) : nullptr;
+	if (!PC || bResolved || bDialogOpen)
 	{
 		return;
 	}
 
 	InteractingCharacter = Character;
 	bDialogOpen = true;
+	bAwaitingEndingChoice = true;
 
 	UNartyGameInstance* GI = Cast<UNartyGameInstance>(UGameplayStatics::GetGameInstance(this));
 	const ENartyHero Hero = GI ? GI->GetSelectedHero() : ENartyHero::None;
@@ -320,7 +327,7 @@ void ANartyFinaleSite::OpenEndingChoice(ACharacter* Character)
 
 	if (EndingWidget)
 	{
-		EndingWidget->Setup(Title, Body, Choices);
+		EndingWidget->Setup(Title, Body, Choices, false);
 		if (!EndingWidget->IsInViewport())
 		{
 			EndingWidget->AddToViewport(1700);
@@ -371,6 +378,8 @@ void ANartyFinaleSite::HandleEndingChoice(int32 ChoiceIndex)
 void ANartyFinaleSite::HandleEndingClosed()
 {
 	CloseDialogs();
+	bAwaitingEndingChoice = true;
+	Label->SetText(NSLOCTEXT("Narty", "Finale_ChooseE", "E \u2014 \u0432\u044b\u0431\u043e\u0440 \u0441\u0443\u0434\u044c\u0431\u044b"));
 }
 
 void ANartyFinaleSite::ResolveEnding(int32 ChoiceIndex)
@@ -381,6 +390,7 @@ void ANartyFinaleSite::ResolveEnding(int32 ChoiceIndex)
 	}
 
 	bResolved = true;
+	bAwaitingEndingChoice = false;
 
 	UNartyGameInstance* GI = Cast<UNartyGameInstance>(UGameplayStatics::GetGameInstance(this));
 	const ENartyHero Hero = GI ? GI->GetSelectedHero() : ENartyHero::None;

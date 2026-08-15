@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "NartyInteractable.h"
 #include "NartyForgeActor.generated.h"
 
 class UStaticMeshComponent;
@@ -12,12 +13,15 @@ class UNartyForgeDialogWidget;
 class ACharacter;
 
 UCLASS()
-class NARTY_API ANartyForgeActor : public AActor
+class NARTY_API ANartyForgeActor : public AActor, public INartyInteractable
 {
 	GENERATED_BODY()
 
 public:
 	ANartyForgeActor();
+
+	virtual bool CanNartyInteract() const override;
+	virtual void TryNartyInteract(ACharacter* Character) override;
 
 protected:
 	virtual void BeginPlay() override;
@@ -44,12 +48,8 @@ protected:
 	UFUNCTION()
 	void HandleDialogClosed();
 
-	UFUNCTION()
-	void HandleInteractPressed();
-
 	void OpenDialog(ACharacter* Character);
 	void CloseDialog();
-	void BindInteractInput(ACharacter* Character);
 
 	UPROPERTY(VisibleAnywhere)
 	TObjectPtr<UStaticMeshComponent> BaseMesh;
@@ -77,5 +77,4 @@ protected:
 
 	bool bWeaponGranted = false;
 	bool bDialogOpen = false;
-	bool bInteractBound = false;
 };

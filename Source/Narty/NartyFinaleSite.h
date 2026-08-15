@@ -4,6 +4,7 @@
 #include "GameFramework/Actor.h"
 #include "NartyHeroTypes.h"
 #include "NartyQuestTypes.h"
+#include "NartyInteractable.h"
 #include "NartyFinaleSite.generated.h"
 
 class UStaticMeshComponent;
@@ -16,7 +17,7 @@ class ACharacter;
 
 /** Final chapter — End of the Narts. */
 UCLASS()
-class NARTY_API ANartyFinaleSite : public AActor
+class NARTY_API ANartyFinaleSite : public AActor, public INartyInteractable
 {
 	GENERATED_BODY()
 
@@ -24,6 +25,9 @@ public:
 	ANartyFinaleSite();
 
 	void ActivateFinale();
+
+	virtual bool CanNartyInteract() const override;
+	virtual void TryNartyInteract(ACharacter* Character) override;
 
 protected:
 	virtual void BeginPlay() override;
@@ -57,16 +61,12 @@ protected:
 	UFUNCTION()
 	void HandleEndingClosed();
 
-	UFUNCTION()
-	void HandleInteractPressed();
-
 	void BuildSanctum();
 	void OpenSatana(ACharacter* Character);
 	void OpenEndingChoice(ACharacter* Character);
 	void CloseDialogs();
 	void ResolveEnding(int32 ChoiceIndex);
 	void PlayEndingVisual(ENartyEnding Ending);
-	void BindInteractInput(ACharacter* Character);
 
 	UPROPERTY(VisibleAnywhere)
 	TObjectPtr<USceneComponent> Root;
@@ -108,6 +108,6 @@ protected:
 	bool bDialogOpen = false;
 	bool bResolved = false;
 	bool bStorm = false;
-	bool bInteractBound = false;
+	bool bAwaitingEndingChoice = false;
 	float StormTime = 0.f;
 };

@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "NartyInteractable.h"
 #include "NartyUatsamongaCup.generated.h"
 
 class UStaticMeshComponent;
@@ -13,7 +14,7 @@ class ACharacter;
 
 /** Cup of truth — boils only before an honest deed. */
 UCLASS()
-class NARTY_API ANartyUatsamongaCup : public AActor
+class NARTY_API ANartyUatsamongaCup : public AActor, public INartyInteractable
 {
 	GENERATED_BODY()
 
@@ -23,6 +24,9 @@ public:
 	void ActivateForQuest();
 	void PlayBoil(bool bBoil);
 	bool HasJudged() const { return bJudged; }
+
+	virtual bool CanNartyInteract() const override;
+	virtual void TryNartyInteract(ACharacter* Character) override;
 
 protected:
 	virtual void BeginPlay() override;
@@ -50,13 +54,9 @@ protected:
 	UFUNCTION()
 	void HandleClosed();
 
-	UFUNCTION()
-	void HandleInteractPressed();
-
 	void OpenJudgment(ACharacter* Character);
 	void CloseDialog();
 	void ResolveChoice(int32 ChoiceIndex);
-	void BindInteractInput(ACharacter* Character);
 
 	UPROPERTY(VisibleAnywhere)
 	TObjectPtr<UStaticMeshComponent> Table;
@@ -89,6 +89,5 @@ protected:
 	bool bDialogOpen = false;
 	bool bJudged = false;
 	bool bBoiling = false;
-	bool bInteractBound = false;
 	float BoilTime = 0.f;
 };

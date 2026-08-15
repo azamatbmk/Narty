@@ -3,12 +3,12 @@
 #include "NartyForgeDialogWidget.h"
 #include "NartyCombatComponent.h"
 #include "NartyGameInstance.h"
+#include "NartyInteractComponent.h"
 #include "NartyHeroTypes.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/PointLightComponent.h"
 #include "Components/BoxComponent.h"
 #include "Components/TextRenderComponent.h"
-#include "Components/InputComponent.h"
 #include "UObject/ConstructorHelpers.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/PlayerController.h"
@@ -86,7 +86,10 @@ void ANartyForgeActor::OnForgeOverlap(
 	}
 
 	InsideCharacter = Character;
-	BindInteractInput(Character);
+	if (UNartyInteractComponent* Interact = UNartyInteractComponent::EnsureOn(Character))
+	{
+		Interact->PushInteractTarget(this);
+	}
 
 	if (!bDialogOpen)
 	{
@@ -104,41 +107,28 @@ void ANartyForgeActor::OnForgeEndOverlap(
 	{
 		InsideCharacter = nullptr;
 	}
+
+	if (ACharacter* Character = Cast<ACharacter>(OtherActor))
+	{
+		if (UNartyInteractComponent* Interact = Character->FindComponentByClass<UNartyInteractComponent>())
+		{
+			Interact->PopInteractTarget(this);
+		}
+	}
 }
 
-void ANartyForgeActor::BindInteractInput(ACharacter* Character)
+bool ANartyForgeActor::CanNartyInteract() const
 {
-	if (bInteractBound || !Character)
-	{
-		return;
-	}
-
-	APlayerController* PC = Cast<APlayerController>(Character->GetController());
-	UInputComponent* IC = Character->InputComponent;
-	if (!IC && PC)
-	{
-		IC = PC->InputComponent;
-	}
-	if (!IC)
-	{
-		return;
-	}
-
-	IC->BindKey(EKeys::E, IE_Pressed, this, &ANartyForgeActor::HandleInteractPressed);
-	bInteractBound = true;
+	return InsideCharacter.IsValid() && !bDialogOpen;
 }
 
-void ANartyForgeActor::HandleInteractPressed()
+void ANartyForgeActor::TryNartyInteract(ACharacter* Character)
 {
-	if (bDialogOpen)
+	if (!Character || bDialogOpen)
 	{
 		return;
 	}
-
-	if (ACharacter* Character = InsideCharacter.Get())
-	{
-		OpenDialog(Character);
-	}
+	OpenDialog(Character);
 }
 
 void ANartyForgeActor::OpenDialog(ACharacter* Character)

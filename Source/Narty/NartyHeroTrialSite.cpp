@@ -4,11 +4,11 @@
 #include "NartyForgeDialogWidget.h"
 #include "NartyChoiceDialogWidget.h"
 #include "NartyGameInstance.h"
+#include "NartyInteractComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/PointLightComponent.h"
 #include "Components/BoxComponent.h"
 #include "Components/TextRenderComponent.h"
-#include "Components/InputComponent.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "UObject/ConstructorHelpers.h"
 #include "GameFramework/Character.h"
@@ -240,7 +240,10 @@ void ANartyHeroTrialSite::OnGateOverlap(
 	}
 
 	InsideGateCharacter = Character;
-	BindInteractInput(Character);
+	if (UNartyInteractComponent* Interact = UNartyInteractComponent::EnsureOn(Character))
+	{
+		Interact->PushInteractTarget(this);
+	}
 
 	if (!bEntered && !bDialogOpen)
 	{
@@ -258,41 +261,49 @@ void ANartyHeroTrialSite::OnGateEndOverlap(
 	{
 		InsideGateCharacter = nullptr;
 	}
+
+	// Keep interact focus while waiting on the irreversible final choice.
+	if (bAwaitingFinalChoice)
+	{
+		return;
+	}
+
+	if (ACharacter* Character = Cast<ACharacter>(OtherActor))
+	{
+		if (UNartyInteractComponent* Interact = Character->FindComponentByClass<UNartyInteractComponent>())
+		{
+			Interact->PopInteractTarget(this);
+		}
+	}
 }
 
-void ANartyHeroTrialSite::BindInteractInput(ACharacter* Character)
+bool ANartyHeroTrialSite::CanNartyInteract() const
 {
-	if (bInteractBound || !Character)
+	if (!bActive || bCompleted || bDialogOpen)
 	{
-		return;
+		return false;
 	}
-
-	APlayerController* PC = Cast<APlayerController>(Character->GetController());
-	UInputComponent* IC = Character->InputComponent;
-	if (!IC && PC)
+	if (bAwaitingFinalChoice)
 	{
-		IC = PC->InputComponent;
+		return true;
 	}
-	if (!IC)
-	{
-		return;
-	}
-
-	IC->BindKey(EKeys::E, IE_Pressed, this, &ANartyHeroTrialSite::HandleInteractPressed);
-	bInteractBound = true;
+	return !bEntered && InsideGateCharacter.IsValid();
 }
 
-void ANartyHeroTrialSite::HandleInteractPressed()
+void ANartyHeroTrialSite::TryNartyInteract(ACharacter* Character)
 {
-	if (!bActive || bCompleted || bEntered || bDialogOpen)
+	if (!Character || !CanNartyInteract())
 	{
 		return;
 	}
 
-	if (ACharacter* Character = InsideGateCharacter.Get())
+	if (bAwaitingFinalChoice)
 	{
-		OpenIntro(Character);
+		OpenFinalDialog(Character);
+		return;
 	}
+
+	OpenIntro(Character);
 }
 
 void ANartyHeroTrialSite::OpenIntro(ACharacter* Character)
@@ -591,7 +602,7 @@ void ANartyHeroTrialSite::CheckBatrazCleared()
 
 void ANartyHeroTrialSite::OpenFinalDialog(ACharacter* Character)
 {
-	if (bCompleted || bDialogOpen)
+	if (bCompleted || bDialogOpen || !Character)
 	{
 		return;
 	}
@@ -604,6 +615,12 @@ void ANartyHeroTrialSite::OpenFinalDialog(ACharacter* Character)
 
 	InteractingCharacter = Character;
 	bDialogOpen = true;
+	bAwaitingFinalChoice = true;
+
+	if (UNartyInteractComponent* Interact = UNartyInteractComponent::EnsureOn(Character))
+	{
+		Interact->PushInteractTarget(this);
+	}
 
 	FText Title;
 	FText Body;
@@ -649,7 +666,8 @@ void ANartyHeroTrialSite::OpenFinalDialog(ACharacter* Character)
 
 	if (FinalWidget)
 	{
-		FinalWidget->Setup(Title, Body, Choices);
+		// Irreversible chapter beat — no "Позже" soft-lock.
+		FinalWidget->Setup(Title, Body, Choices, false);
 		if (!FinalWidget->IsInViewport())
 		{
 			FinalWidget->AddToViewport(1500);
@@ -677,6 +695,8 @@ void ANartyHeroTrialSite::HandleFinalChoice(int32 ChoiceIndex)
 void ANartyHeroTrialSite::HandleFinalClosed()
 {
 	CloseAnyDialog();
+	bAwaitingFinalChoice = true;
+	GateLabel->SetText(NSLOCTEXT("Narty", "Trial_ChooseE", "E \u2014 \u0432\u044b\u0431\u043e\u0440"));
 }
 
 void ANartyHeroTrialSite::CompleteTrial(bool bNoblePath)
@@ -687,7 +707,16 @@ void ANartyHeroTrialSite::CompleteTrial(bool bNoblePath)
 	}
 
 	bCompleted = true;
+	bAwaitingFinalChoice = false;
 	GateLabel->SetText(NSLOCTEXT("Narty", "Trial_Done", "\u041f\u0443\u0442\u044c \u043f\u0440\u043e\u0439\u0434\u0435\u043d"));
+
+	if (ACharacter* Character = UGameplayStatics::GetPlayerCharacter(this, 0))
+	{
+		if (UNartyInteractComponent* Interact = Character->FindComponentByClass<UNartyInteractComponent>())
+		{
+			Interact->PopInteractTarget(this);
+		}
+	}
 
 	if (UNartyGameInstance* GI = Cast<UNartyGameInstance>(UGameplayStatics::GetGameInstance(this)))
 	{

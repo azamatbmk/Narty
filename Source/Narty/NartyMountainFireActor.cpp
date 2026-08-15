@@ -3,11 +3,11 @@
 #include "NartyTrainingDummy.h"
 #include "NartyForgeDialogWidget.h"
 #include "NartyGameInstance.h"
+#include "NartyInteractComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/PointLightComponent.h"
 #include "Components/BoxComponent.h"
 #include "Components/TextRenderComponent.h"
-#include "Components/InputComponent.h"
 #include "UObject/ConstructorHelpers.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/PlayerController.h"
@@ -171,7 +171,10 @@ void ANartyMountainFireActor::OnFireOverlap(
 	}
 
 	InsideCharacter = Character;
-	BindInteractInput(Character);
+	if (UNartyInteractComponent* Interact = UNartyInteractComponent::EnsureOn(Character))
+	{
+		Interact->PushInteractTarget(this);
+	}
 
 	if (!bDialogOpen)
 	{
@@ -189,41 +192,28 @@ void ANartyMountainFireActor::OnFireEndOverlap(
 	{
 		InsideCharacter = nullptr;
 	}
+
+	if (ACharacter* Character = Cast<ACharacter>(OtherActor))
+	{
+		if (UNartyInteractComponent* Interact = Character->FindComponentByClass<UNartyInteractComponent>())
+		{
+			Interact->PopInteractTarget(this);
+		}
+	}
 }
 
-void ANartyMountainFireActor::BindInteractInput(ACharacter* Character)
+bool ANartyMountainFireActor::CanNartyInteract() const
 {
-	if (bInteractBound || !Character)
-	{
-		return;
-	}
-
-	APlayerController* PC = Cast<APlayerController>(Character->GetController());
-	UInputComponent* IC = Character->InputComponent;
-	if (!IC && PC)
-	{
-		IC = PC->InputComponent;
-	}
-	if (!IC)
-	{
-		return;
-	}
-
-	IC->BindKey(EKeys::E, IE_Pressed, this, &ANartyMountainFireActor::HandleInteractPressed);
-	bInteractBound = true;
+	return bQuestActive && !bFireTaken && InsideCharacter.IsValid() && !bDialogOpen;
 }
 
-void ANartyMountainFireActor::HandleInteractPressed()
+void ANartyMountainFireActor::TryNartyInteract(ACharacter* Character)
 {
-	if (!bQuestActive || bFireTaken || bDialogOpen)
+	if (!Character || !CanNartyInteract())
 	{
 		return;
 	}
-
-	if (ACharacter* Character = InsideCharacter.Get())
-	{
-		TryTakeFire(Character);
-	}
+	TryTakeFire(Character);
 }
 
 void ANartyMountainFireActor::TryTakeFire(ACharacter* Character)

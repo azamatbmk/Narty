@@ -25,7 +25,7 @@ ANartyPrototypeArena::ANartyPrototypeArena()
 		CubeMesh = CubeFinder.Object;
 	}
 
-	SetActorLocation(FVector(5000.f, 0.f, 100.f));
+	SetActorLocation(FVector(0.f, 0.f, 100.f));
 }
 
 ANartyPrototypeArena* ANartyPrototypeArena::EnsureInWorld(UWorld* World)
@@ -43,7 +43,7 @@ ANartyPrototypeArena* ANartyPrototypeArena::EnsureInWorld(UWorld* World)
 	FActorSpawnParameters Params;
 	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 	return World->SpawnActor<ANartyPrototypeArena>(
-		ANartyPrototypeArena::StaticClass(), FVector(5000.f, 0.f, 100.f), FRotator::ZeroRotator, Params);
+		ANartyPrototypeArena::StaticClass(), FVector(0.f, 0.f, 100.f), FRotator::ZeroRotator, Params);
 }
 
 FTransform ANartyPrototypeArena::GetPlayerStartTransform() const
@@ -68,7 +68,9 @@ void ANartyPrototypeArena::BuildGeometry()
 
 	AddBlock(Root, TEXT("Floor"), FVector(0.f, 0.f, -50.f), FVector(34.f, 8.f, 1.f), FLinearColor(0.18f, 0.16f, 0.14f));
 	AddBlock(Root, TEXT("WallLeft"), FVector(0.f, -450.f, 400.f), FVector(34.f, 1.5f, 10.f), FLinearColor(0.25f, 0.22f, 0.2f));
-	AddBlock(Root, TEXT("WallRight"), FVector(0.f, 450.f, 400.f), FVector(34.f, 1.5f, 10.f), FLinearColor(0.25f, 0.22f, 0.2f));
+	// Gap in right wall near nykhas → side path to hero trial
+	AddBlock(Root, TEXT("WallRightA"), FVector(-1050.f, 450.f, 400.f), FVector(13.f, 1.5f, 10.f), FLinearColor(0.25f, 0.22f, 0.2f));
+	AddBlock(Root, TEXT("WallRightB"), FVector(900.f, 450.f, 400.f), FVector(16.f, 1.5f, 10.f), FLinearColor(0.25f, 0.22f, 0.2f));
 	AddBlock(Root, TEXT("WallBack"), FVector(-1400.f, 0.f, 400.f), FVector(1.5f, 10.f, 10.f), FLinearColor(0.2f, 0.18f, 0.16f));
 
 	// Split front wall — path to mountain ledge
@@ -84,6 +86,11 @@ void ANartyPrototypeArena::BuildGeometry()
 	AddBlock(Root, TEXT("Step2"), FVector(1320.f, 0.f, 70.f), FVector(2.5f, 3.f, 0.6f), FLinearColor(0.24f, 0.21f, 0.18f));
 	AddBlock(Root, TEXT("Step3"), FVector(1440.f, 0.f, 120.f), FVector(2.5f, 3.f, 0.6f), FLinearColor(0.24f, 0.21f, 0.18f));
 	AddBlock(Root, TEXT("Ledge"), FVector(1580.f, 0.f, 160.f), FVector(4.f, 4.f, 0.7f), FLinearColor(0.2f, 0.18f, 0.15f));
+
+	// Walkable corridor from nykhas gap to hero trial (+Y)
+	AddBlock(Root, TEXT("TrialPathFloor"), FVector(-200.f, 780.f, -50.f), FVector(5.f, 12.f, 1.f), FLinearColor(0.17f, 0.15f, 0.13f));
+	AddBlock(Root, TEXT("TrialPathWallL"), FVector(-420.f, 780.f, 250.f), FVector(1.f, 12.f, 6.f), FLinearColor(0.22f, 0.2f, 0.18f));
+	AddBlock(Root, TEXT("TrialPathWallR"), FVector(20.f, 780.f, 250.f), FVector(1.f, 12.f, 6.f), FLinearColor(0.22f, 0.2f, 0.18f));
 
 	UWorld* World = GetWorld();
 	if (!World)

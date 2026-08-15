@@ -1,12 +1,13 @@
 #include "NartyPlayerController.h"
 
 #include "NartyGameInstance.h"
+#include "NartyInteractComponent.h"
+#include "GameFramework/Character.h"
 
 void ANartyPlayerController::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// Hero select is owned by UNartyGameInstance (map may use BP GameMode/PC).
 	if (UNartyGameInstance* GI = GetGameInstance<UNartyGameInstance>())
 	{
 		if (GI->HasSelectedHero())
@@ -19,6 +20,11 @@ void ANartyPlayerController::BeginPlay()
 void ANartyPlayerController::OnPossess(APawn* InPawn)
 {
 	Super::OnPossess(InPawn);
+
+	if (ACharacter* HeroPawn = Cast<ACharacter>(InPawn))
+	{
+		UNartyInteractComponent::EnsureOn(HeroPawn);
+	}
 
 	if (UNartyGameInstance* GI = GetGameInstance<UNartyGameInstance>())
 	{

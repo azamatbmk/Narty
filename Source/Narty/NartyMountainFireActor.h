@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "NartyInteractable.h"
 #include "NartyMountainFireActor.generated.h"
 
 class UStaticMeshComponent;
@@ -14,7 +15,7 @@ class ACharacter;
 
 /** Mountain fire objective for chapter "Fire of the settlement". */
 UCLASS()
-class NARTY_API ANartyMountainFireActor : public AActor
+class NARTY_API ANartyMountainFireActor : public AActor, public INartyInteractable
 {
 	GENERATED_BODY()
 
@@ -22,6 +23,9 @@ public:
 	ANartyMountainFireActor();
 
 	void ActivateForQuest();
+
+	virtual bool CanNartyInteract() const override;
+	virtual void TryNartyInteract(ACharacter* Character) override;
 
 protected:
 	virtual void BeginPlay() override;
@@ -49,15 +53,11 @@ protected:
 	UFUNCTION()
 	void HandleBargainClosed();
 
-	UFUNCTION()
-	void HandleInteractPressed();
-
 	void TryTakeFire(ACharacter* Character);
 	void GiveFireToPlayer(ACharacter* Character);
 	bool AreGuardiansDefeated() const;
 	void OpenBargainDialog(ACharacter* Character);
 	void RetryTakeForOverlappingPlayers();
-	void BindInteractInput(ACharacter* Character);
 
 	UFUNCTION()
 	void OnGuardianDefeated(AActor* DestroyedActor);
@@ -92,5 +92,4 @@ protected:
 	bool bQuestActive = false;
 	bool bFireTaken = false;
 	bool bDialogOpen = false;
-	bool bInteractBound = false;
 };

@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "NartyHeroTypes.h"
+#include "NartyInteractable.h"
 #include "NartyHeroTrialSite.generated.h"
 
 class UStaticMeshComponent;
@@ -16,7 +17,7 @@ class ACharacter;
 
 /** Unique chapter 4 site — content depends on selected hero. */
 UCLASS()
-class NARTY_API ANartyHeroTrialSite : public AActor
+class NARTY_API ANartyHeroTrialSite : public AActor, public INartyInteractable
 {
 	GENERATED_BODY()
 
@@ -25,6 +26,9 @@ public:
 
 	void ActivateForHero(ENartyHero Hero);
 	FVector GetGateWorldLocation() const;
+
+	virtual bool CanNartyInteract() const override;
+	virtual void TryNartyInteract(ACharacter* Character) override;
 
 protected:
 	virtual void BeginPlay() override;
@@ -66,9 +70,6 @@ protected:
 	UFUNCTION()
 	void HandleIntroClosed();
 
-	UFUNCTION()
-	void HandleInteractPressed();
-
 	void BuildSharedShell();
 	void SetupSoslanTrial();
 	void SetupBatrazTrial();
@@ -79,7 +80,6 @@ protected:
 	void CloseAnyDialog();
 	void CompleteTrial(bool bNoblePath);
 	void CheckBatrazCleared();
-	void BindInteractInput(ACharacter* Character);
 	UStaticMeshComponent* AddBlock(const FName& Name, const FVector& RelLoc, const FVector& Scale, const FLinearColor& Color);
 	UBoxComponent* AddTrigger(const FName& Name, const FVector& RelLoc, const FVector& Extent, int32 VisionIndex);
 
@@ -122,7 +122,7 @@ protected:
 	bool bCompleted = false;
 	bool bDialogOpen = false;
 	bool bShellBuilt = false;
-	bool bInteractBound = false;
+	bool bAwaitingFinalChoice = false;
 	int32 VisionsSeen = 0;
 	int32 SyrdonDeals = 0;
 	FTimerHandle BatrazCheckHandle;

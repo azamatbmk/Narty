@@ -3,11 +3,11 @@
 #include "NartyChoiceDialogWidget.h"
 #include "NartyGameInstance.h"
 #include "NartyHeroTypes.h"
+#include "NartyInteractComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/PointLightComponent.h"
 #include "Components/BoxComponent.h"
 #include "Components/TextRenderComponent.h"
-#include "Components/InputComponent.h"
 #include "UObject/ConstructorHelpers.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/PlayerController.h"
@@ -148,7 +148,10 @@ void ANartyUatsamongaCup::OnCupOverlap(
 	}
 
 	InsideCharacter = Character;
-	BindInteractInput(Character);
+	if (UNartyInteractComponent* Interact = UNartyInteractComponent::EnsureOn(Character))
+	{
+		Interact->PushInteractTarget(this);
+	}
 
 	if (!bDialogOpen)
 	{
@@ -166,41 +169,28 @@ void ANartyUatsamongaCup::OnCupEndOverlap(
 	{
 		InsideCharacter = nullptr;
 	}
+
+	if (ACharacter* Character = Cast<ACharacter>(OtherActor))
+	{
+		if (UNartyInteractComponent* Interact = Character->FindComponentByClass<UNartyInteractComponent>())
+		{
+			Interact->PopInteractTarget(this);
+		}
+	}
 }
 
-void ANartyUatsamongaCup::BindInteractInput(ACharacter* Character)
+bool ANartyUatsamongaCup::CanNartyInteract() const
 {
-	if (bInteractBound || !Character)
-	{
-		return;
-	}
-
-	APlayerController* PC = Cast<APlayerController>(Character->GetController());
-	UInputComponent* IC = Character->InputComponent;
-	if (!IC && PC)
-	{
-		IC = PC->InputComponent;
-	}
-	if (!IC)
-	{
-		return;
-	}
-
-	IC->BindKey(EKeys::E, IE_Pressed, this, &ANartyUatsamongaCup::HandleInteractPressed);
-	bInteractBound = true;
+	return bQuestActive && !bJudged && InsideCharacter.IsValid() && !bDialogOpen;
 }
 
-void ANartyUatsamongaCup::HandleInteractPressed()
+void ANartyUatsamongaCup::TryNartyInteract(ACharacter* Character)
 {
-	if (!bQuestActive || bJudged || bDialogOpen)
+	if (!Character || !CanNartyInteract())
 	{
 		return;
 	}
-
-	if (ACharacter* Character = InsideCharacter.Get())
-	{
-		OpenJudgment(Character);
-	}
+	OpenJudgment(Character);
 }
 
 void ANartyUatsamongaCup::OpenJudgment(ACharacter* Character)

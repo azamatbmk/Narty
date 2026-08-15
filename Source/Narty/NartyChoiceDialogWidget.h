@@ -22,7 +22,7 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "Narty|Dialog")
 	FOnNartyChoiceClosed OnClosed;
 
-	void Setup(const FText& Title, const FText& Body, const TArray<FText>& Choices);
+	void Setup(const FText& Title, const FText& Body, const TArray<FText>& Choices, bool bAllowDismiss = true);
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
@@ -61,4 +61,5 @@ private:
 	FText CachedTitle;
 	FText CachedBody;
 	TArray<FText> CachedChoices;
+	bool bCachedAllowDismiss = true;
 };

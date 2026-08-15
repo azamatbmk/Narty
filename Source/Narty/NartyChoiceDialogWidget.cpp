@@ -10,11 +10,12 @@
 #include "Components/OverlaySlot.h"
 #include "Components/SizeBox.h"
 
-void UNartyChoiceDialogWidget::Setup(const FText& Title, const FText& Body, const TArray<FText>& Choices)
+void UNartyChoiceDialogWidget::Setup(const FText& Title, const FText& Body, const TArray<FText>& Choices, bool bAllowDismiss)
 {
 	CachedTitle = Title;
 	CachedBody = Body;
 	CachedChoices = Choices;
+	bCachedAllowDismiss = bAllowDismiss;
 
 	if (TitleText)
 	{
@@ -36,6 +37,11 @@ void UNartyChoiceDialogWidget::Setup(const FText& Title, const FText& Body, cons
 		{
 			ChoiceLabels[i]->SetText(CachedChoices[i]);
 		}
+	}
+
+	if (CloseButton)
+	{
+		CloseButton->SetVisibility(bCachedAllowDismiss ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
 	}
 }
 
@@ -69,7 +75,7 @@ void UNartyChoiceDialogWidget::NativeConstruct()
 		CloseButton->OnClicked.AddDynamic(this, &UNartyChoiceDialogWidget::HandleClose);
 	}
 
-	Setup(CachedTitle, CachedBody, CachedChoices);
+	Setup(CachedTitle, CachedBody, CachedChoices, bCachedAllowDismiss);
 }
 
 void UNartyChoiceDialogWidget::BuildLayout()
@@ -167,6 +173,10 @@ void UNartyChoiceDialogWidget::HandleChoice2() { Pick(2); }
 
 void UNartyChoiceDialogWidget::HandleClose()
 {
+	if (!bCachedAllowDismiss)
+	{
+		return;
+	}
 	OnClosed.Broadcast();
 }
 
