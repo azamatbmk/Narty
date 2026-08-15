@@ -753,6 +753,10 @@ void UNartyGameInstance::RestartCampaign()
 	}
 
 	bRestartPending = true;
-	const FString LevelName = UGameplayStatics::GetCurrentLevelName(World, true);
-	UGameplayStatics::OpenLevel(World, FName(*LevelName));
+	// Always reload the Narty gorge map with our GameMode (map WorldSettings + URL).
+	UGameplayStatics::OpenLevel(
+		World,
+		FName(TEXT("/Game/Narty/Lvl_Gorge")),
+		true,
+		TEXT("game=/Script/Narty.NartyGameMode"));
 }

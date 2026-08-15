@@ -1,6 +1,7 @@
 #include "NartyInteractComponent.h"
 
 #include "NartyInteractable.h"
+#include "NartyInteractPromptWidget.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "InputAction.h"
@@ -8,6 +9,7 @@
 #include "GameFramework/Character.h"
 #include "GameFramework/PlayerController.h"
 #include "Engine/LocalPlayer.h"
+#include "Blueprint/UserWidget.h"
 
 UNartyInteractComponent::UNartyInteractComponent()
 {
@@ -33,6 +35,19 @@ UNartyInteractComponent* UNartyInteractComponent::EnsureOn(ACharacter* Character
 	return Comp;
 }
 
+void UNartyInteractComponent::NotifyPromptChanged(ACharacter* Character)
+{
+	if (UNartyInteractComponent* Comp = Character ? Character->FindComponentByClass<UNartyInteractComponent>() : nullptr)
+	{
+		Comp->RefreshPrompt();
+	}
+}
+
+void UNartyInteractComponent::RefreshPrompt()
+{
+	UpdatePrompt();
+}
+
 void UNartyInteractComponent::BeginPlay()
 {
 	Super::BeginPlay();
@@ -44,6 +59,13 @@ void UNartyInteractComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	RemoveInteractMapping();
 	InteractFocusStack.Reset();
 	bInputBound = false;
+
+	if (IsValid(PromptWidget))
+	{
+		PromptWidget->RemoveFromParent();
+	}
+	PromptWidget = nullptr;
+
 	Super::EndPlay(EndPlayReason);
 }
 
@@ -124,6 +146,56 @@ void UNartyInteractComponent::EnsureInput()
 	}
 }
 
+bool UNartyInteractComponent::HasAvailableInteract() const
+{
+	for (int32 i = InteractFocusStack.Num() - 1; i >= 0; --i)
+	{
+		if (AActor* Target = InteractFocusStack[i].Get())
+		{
+			if (const INartyInteractable* Interactable = Cast<INartyInteractable>(Target))
+			{
+				if (Interactable->CanNartyInteract())
+				{
+					return true;
+				}
+			}
+		}
+	}
+	return false;
+}
+
+void UNartyInteractComponent::UpdatePrompt()
+{
+	ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner());
+	APlayerController* PC = OwnerCharacter ? Cast<APlayerController>(OwnerCharacter->GetController()) : nullptr;
+	if (!PC)
+	{
+		return;
+	}
+
+	const bool bShow = HasAvailableInteract();
+
+	if (bShow)
+	{
+		if (!IsValid(PromptWidget))
+		{
+			PromptWidget = CreateWidget<UNartyInteractPromptWidget>(PC, UNartyInteractPromptWidget::StaticClass());
+			if (PromptWidget)
+			{
+				PromptWidget->AddToViewport(80);
+			}
+		}
+		if (IsValid(PromptWidget))
+		{
+			PromptWidget->SetPromptVisible(true);
+		}
+	}
+	else if (IsValid(PromptWidget))
+	{
+		PromptWidget->SetPromptVisible(false);
+	}
+}
+
 void UNartyInteractComponent::PushInteractTarget(AActor* Interactable)
 {
 	if (!Interactable || !Interactable->GetClass()->ImplementsInterface(UNartyInteractable::StaticClass()))
@@ -138,6 +210,7 @@ void UNartyInteractComponent::PushInteractTarget(AActor* Interactable)
 		return !Ptr.IsValid() || Ptr.Get() == Interactable;
 	});
 	InteractFocusStack.Add(Interactable);
+	UpdatePrompt();
 }
 
 void UNartyInteractComponent::PopInteractTarget(AActor* Interactable)
@@ -146,6 +219,7 @@ void UNartyInteractComponent::PopInteractTarget(AActor* Interactable)
 	{
 		return !Ptr.IsValid() || Ptr.Get() == Interactable;
 	});
+	UpdatePrompt();
 }
 
 void UNartyInteractComponent::HandleInteractStarted()
@@ -170,8 +244,11 @@ void UNartyInteractComponent::HandleInteractStarted()
 			if (Interactable->CanNartyInteract())
 			{
 				Interactable->TryNartyInteract(OwnerCharacter);
+				UpdatePrompt();
 				return;
 			}
 		}
 	}
+
+	UpdatePrompt();
 }

@@ -268,6 +268,7 @@ void ANartyUatsamongaCup::OpenJudgment(ACharacter* Character)
 	}
 	PC->SetInputMode(InputMode);
 	Character->DisableInput(PC);
+	UNartyInteractComponent::NotifyPromptChanged(Character);
 }
 
 void ANartyUatsamongaCup::CloseDialog()
@@ -289,6 +290,7 @@ void ANartyUatsamongaCup::CloseDialog()
 	}
 
 	bDialogOpen = false;
+	UNartyInteractComponent::NotifyPromptChanged(InteractingCharacter.Get());
 }
 
 void ANartyUatsamongaCup::HandleChoice(int32 ChoiceIndex)

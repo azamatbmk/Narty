@@ -7,6 +7,9 @@
 
 class UAnimMontage;
 class UStaticMeshComponent;
+class UInputAction;
+class UInputMappingContext;
+class ULocalPlayer;
 
 UCLASS(ClassGroup = (Narty), meta = (BlueprintSpawnableComponent))
 class NARTY_API UNartyCombatComponent : public UActorComponent
@@ -29,11 +32,16 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
-	void BindAttackInput();
+	void EnsureAttackInput();
+	void RemoveAttackMapping();
 	void PlayAttackAnimation();
 	void PerformStrike();
 	void EnsureWeaponMesh();
+
+	UFUNCTION()
+	void HandleAttackStarted();
 
 	UPROPERTY(VisibleAnywhere, Category = "Narty|Combat")
 	ENartyHero Hero = ENartyHero::None;
@@ -65,8 +73,17 @@ protected:
 	UPROPERTY()
 	TObjectPtr<UStaticMesh> WeaponMeshAsset;
 
+	UPROPERTY()
+	TObjectPtr<UInputAction> AttackAction;
+
+	UPROPERTY()
+	TObjectPtr<UInputMappingContext> AttackMappingContext;
+
+	TWeakObjectPtr<ULocalPlayer> BoundLocalPlayer;
+
 	float LastAttackTime = -100.f;
 	int32 AttackComboIndex = 0;
 	bool bInputBound = false;
+	bool bMappingAdded = false;
 	FTimerHandle StrikeDelayHandle;
 };

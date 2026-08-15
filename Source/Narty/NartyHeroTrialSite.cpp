@@ -372,6 +372,7 @@ void ANartyHeroTrialSite::OpenIntro(ACharacter* Character)
 	}
 	PC->SetInputMode(Mode);
 	Character->DisableInput(PC);
+	UNartyInteractComponent::NotifyPromptChanged(Character);
 }
 
 void ANartyHeroTrialSite::HandleIntroAccepted()
@@ -511,6 +512,7 @@ void ANartyHeroTrialSite::OnVisionOverlap(
 		Mode.SetWidgetToFocus(IntroWidget->TakeWidget());
 		PC->SetInputMode(Mode);
 		Character->DisableInput(PC);
+		UNartyInteractComponent::NotifyPromptChanged(Character);
 
 		VisionsSeen++;
 		return;
@@ -544,6 +546,7 @@ void ANartyHeroTrialSite::OnVisionOverlap(
 		Mode.SetWidgetToFocus(IntroWidget->TakeWidget());
 		PC->SetInputMode(Mode);
 		Character->DisableInput(PC);
+		UNartyInteractComponent::NotifyPromptChanged(Character);
 
 		SyrdonDeals++;
 		return;
@@ -572,6 +575,7 @@ void ANartyHeroTrialSite::CloseAnyDialog()
 		}
 	}
 	bDialogOpen = false;
+	UNartyInteractComponent::NotifyPromptChanged(InteractingCharacter.Get());
 }
 
 void ANartyHeroTrialSite::CheckBatrazCleared()
@@ -683,6 +687,7 @@ void ANartyHeroTrialSite::OpenFinalDialog(ACharacter* Character)
 	}
 	PC->SetInputMode(Mode);
 	Character->DisableInput(PC);
+	UNartyInteractComponent::NotifyPromptChanged(Character);
 }
 
 void ANartyHeroTrialSite::HandleFinalChoice(int32 ChoiceIndex)

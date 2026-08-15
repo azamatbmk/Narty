@@ -252,6 +252,7 @@ void ANartyFinaleSite::OpenSatana(ACharacter* Character)
 	}
 	PC->SetInputMode(Mode);
 	Character->DisableInput(PC);
+	UNartyInteractComponent::NotifyPromptChanged(Character);
 }
 
 void ANartyFinaleSite::HandleSatanaAccepted()
@@ -343,6 +344,7 @@ void ANartyFinaleSite::OpenEndingChoice(ACharacter* Character)
 	}
 	PC->SetInputMode(Mode);
 	Character->DisableInput(PC);
+	UNartyInteractComponent::NotifyPromptChanged(Character);
 }
 
 void ANartyFinaleSite::CloseDialogs()
@@ -367,6 +369,7 @@ void ANartyFinaleSite::CloseDialogs()
 		}
 	}
 	bDialogOpen = false;
+	UNartyInteractComponent::NotifyPromptChanged(InteractingCharacter.Get());
 }
 
 void ANartyFinaleSite::HandleEndingChoice(int32 ChoiceIndex)

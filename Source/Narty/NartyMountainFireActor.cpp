@@ -304,6 +304,7 @@ void ANartyMountainFireActor::OpenBargainDialog(ACharacter* Character)
 	}
 	PC->SetInputMode(InputMode);
 	Character->DisableInput(PC);
+	UNartyInteractComponent::NotifyPromptChanged(Character);
 }
 
 void ANartyMountainFireActor::HandleBargainAccepted()
@@ -324,6 +325,7 @@ void ANartyMountainFireActor::HandleBargainAccepted()
 		GiveFireToPlayer(Character);
 	}
 	bDialogOpen = false;
+	UNartyInteractComponent::NotifyPromptChanged(InteractingCharacter.Get());
 }
 
 void ANartyMountainFireActor::HandleBargainClosed()
@@ -343,6 +345,7 @@ void ANartyMountainFireActor::HandleBargainClosed()
 		}
 	}
 	bDialogOpen = false;
+	UNartyInteractComponent::NotifyPromptChanged(InteractingCharacter.Get());
 }
 
 void ANartyMountainFireActor::GiveFireToPlayer(ACharacter* Character)

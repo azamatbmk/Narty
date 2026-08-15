@@ -212,6 +212,7 @@ void ANartyForgeActor::OpenDialog(ACharacter* Character)
 	}
 	PC->SetInputMode(InputMode);
 	Character->DisableInput(PC);
+	UNartyInteractComponent::NotifyPromptChanged(Character);
 }
 
 void ANartyForgeActor::CloseDialog()
@@ -233,6 +234,7 @@ void ANartyForgeActor::CloseDialog()
 	}
 
 	bDialogOpen = false;
+	UNartyInteractComponent::NotifyPromptChanged(InteractingCharacter.Get());
 }
 
 void ANartyForgeActor::HandleDialogAccepted()

@@ -8,6 +8,7 @@ class UInputAction;
 class UInputMappingContext;
 class ACharacter;
 class ULocalPlayer;
+class UNartyInteractPromptWidget;
 
 /**
  * Shared Interact (E) via Enhanced Input.
@@ -26,12 +27,19 @@ public:
 
 	static UNartyInteractComponent* EnsureOn(ACharacter* Character);
 
+	/** Re-evaluate E prompt (call after dialog open/close). */
+	static void NotifyPromptChanged(ACharacter* Character);
+
 	void PushInteractTarget(AActor* Interactable);
 	void PopInteractTarget(AActor* Interactable);
+
+	void RefreshPrompt();
 
 protected:
 	void EnsureInput();
 	void RemoveInteractMapping();
+	void UpdatePrompt();
+	bool HasAvailableInteract() const;
 
 	UFUNCTION()
 	void HandleInteractStarted();
@@ -41,6 +49,9 @@ protected:
 
 	UPROPERTY()
 	TObjectPtr<UInputMappingContext> InteractMappingContext;
+
+	UPROPERTY()
+	TObjectPtr<UNartyInteractPromptWidget> PromptWidget;
 
 	UPROPERTY()
 	TArray<TWeakObjectPtr<AActor>> InteractFocusStack;

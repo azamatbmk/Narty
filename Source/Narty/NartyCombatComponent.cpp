@@ -3,12 +3,16 @@
 #include "NartyTrainingDummy.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/PlayerController.h"
-#include "Components/InputComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Animation/AnimMontage.h"
 #include "Animation/AnimSequence.h"
 #include "Animation/AnimInstance.h"
+#include "EnhancedInputComponent.h"
+#include "EnhancedInputSubsystems.h"
+#include "InputAction.h"
+#include "InputMappingContext.h"
+#include "Engine/LocalPlayer.h"
 #include "Engine/World.h"
 #include "TimerManager.h"
 #include "DrawDebugHelpers.h"
@@ -50,7 +54,44 @@ void UNartyCombatComponent::BeginPlay()
 	UE_LOG(LogTemp, Warning, TEXT("Narty: loaded attack montages=%d sequences=%d"),
 		AttackMontages.Num(), AttackSequences.Num());
 
-	BindAttackInput();
+	EnsureAttackInput();
+}
+
+void UNartyCombatComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(StrikeDelayHandle);
+		World->GetTimerManager().ClearAllTimersForObject(this);
+	}
+
+	RemoveAttackMapping();
+	bInputBound = false;
+	Super::EndPlay(EndPlayReason);
+}
+
+void UNartyCombatComponent::RemoveAttackMapping()
+{
+	if (!bMappingAdded)
+	{
+		BoundLocalPlayer = nullptr;
+		return;
+	}
+
+	if (ULocalPlayer* LP = BoundLocalPlayer.Get())
+	{
+		if (UEnhancedInputLocalPlayerSubsystem* Subsystem =
+				ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(LP))
+		{
+			if (AttackMappingContext)
+			{
+				Subsystem->RemoveMappingContext(AttackMappingContext);
+			}
+		}
+	}
+
+	BoundLocalPlayer = nullptr;
+	bMappingAdded = false;
 }
 
 void UNartyCombatComponent::SetHero(ENartyHero InHero)
@@ -81,7 +122,7 @@ void UNartyCombatComponent::SetHero(ENartyHero InHero)
 		break;
 	}
 
-	BindAttackInput();
+	EnsureAttackInput();
 }
 
 void UNartyCombatComponent::GrantForgeWeapon()
@@ -94,23 +135,23 @@ void UNartyCombatComponent::GrantForgeWeapon()
 
 void UNartyCombatComponent::EnsureWeaponMesh()
 {
-	ACharacter* Character = Cast<ACharacter>(GetOwner());
-	if (!Character || WeaponMesh)
+	ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner());
+	if (!OwnerCharacter || WeaponMesh)
 	{
 		return;
 	}
 
-	USkeletalMeshComponent* CharMesh = Character->GetMesh();
+	USkeletalMeshComponent* CharMesh = OwnerCharacter->GetMesh();
 	if (!CharMesh)
 	{
 		return;
 	}
 
-	WeaponMesh = NewObject<UStaticMeshComponent>(Character, TEXT("NartyWeaponBlade"));
+	WeaponMesh = NewObject<UStaticMeshComponent>(OwnerCharacter, TEXT("NartyWeaponBlade"));
 	WeaponMesh->SetupAttachment(CharMesh, TEXT("hand_r"));
 	WeaponMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	WeaponMesh->RegisterComponent();
-	Character->AddInstanceComponent(WeaponMesh);
+	OwnerCharacter->AddInstanceComponent(WeaponMesh);
 
 	if (WeaponMeshAsset)
 	{
@@ -132,41 +173,73 @@ void UNartyCombatComponent::EnsureWeaponMesh()
 	}
 }
 
-void UNartyCombatComponent::BindAttackInput()
+void UNartyCombatComponent::EnsureAttackInput()
 {
-	if (bInputBound)
+	if (!AttackAction)
 	{
-		return;
+		AttackAction = NewObject<UInputAction>(this, TEXT("IA_NartyAttack"));
+		AttackAction->ValueType = EInputActionValueType::Boolean;
 	}
 
-	APawn* OwnerPawn = Cast<APawn>(GetOwner());
-	if (!OwnerPawn)
+	if (!AttackMappingContext)
 	{
-		return;
+		AttackMappingContext = NewObject<UInputMappingContext>(this, TEXT("IMC_NartyAttack"));
+		AttackMappingContext->MapKey(AttackAction, EKeys::LeftMouseButton);
+		AttackMappingContext->MapKey(AttackAction, EKeys::LeftControl);
 	}
 
-	UInputComponent* IC = OwnerPawn->InputComponent;
-	if (!IC)
-	{
-		if (APlayerController* PC = Cast<APlayerController>(OwnerPawn->GetController()))
-		{
-			IC = PC->InputComponent;
-		}
-	}
-
-	if (!IC)
+	ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner());
+	APlayerController* PC = OwnerCharacter ? Cast<APlayerController>(OwnerCharacter->GetController()) : nullptr;
+	if (!PC)
 	{
 		if (UWorld* World = GetWorld())
 		{
 			World->GetTimerManager().SetTimerForNextTick(
-				FTimerDelegate::CreateUObject(this, &UNartyCombatComponent::BindAttackInput));
+				FTimerDelegate::CreateUObject(this, &UNartyCombatComponent::EnsureAttackInput));
 		}
 		return;
 	}
 
-	IC->BindKey(EKeys::LeftMouseButton, IE_Pressed, this, &UNartyCombatComponent::TryAttack);
-	IC->BindKey(EKeys::LeftControl, IE_Pressed, this, &UNartyCombatComponent::TryAttack);
-	bInputBound = true;
+	if (!bMappingAdded)
+	{
+		if (ULocalPlayer* LP = PC->GetLocalPlayer())
+		{
+			if (UEnhancedInputLocalPlayerSubsystem* Subsystem =
+					ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(LP))
+			{
+				Subsystem->AddMappingContext(AttackMappingContext, 1);
+				BoundLocalPlayer = LP;
+				bMappingAdded = true;
+			}
+		}
+	}
+
+	if (bInputBound || !AttackAction)
+	{
+		return;
+	}
+
+	UInputComponent* IC = OwnerCharacter->InputComponent;
+	if (!IC)
+	{
+		IC = PC->InputComponent;
+	}
+
+	if (UEnhancedInputComponent* EIC = Cast<UEnhancedInputComponent>(IC))
+	{
+		EIC->BindAction(AttackAction, ETriggerEvent::Started, this, &UNartyCombatComponent::HandleAttackStarted);
+		bInputBound = true;
+	}
+	else if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().SetTimerForNextTick(
+			FTimerDelegate::CreateUObject(this, &UNartyCombatComponent::EnsureAttackInput));
+	}
+}
+
+void UNartyCombatComponent::HandleAttackStarted()
+{
+	TryAttack();
 }
 
 void UNartyCombatComponent::TryAttack()
@@ -197,8 +270,8 @@ void UNartyCombatComponent::TryAttack()
 
 void UNartyCombatComponent::PlayAttackAnimation()
 {
-	ACharacter* Character = Cast<ACharacter>(GetOwner());
-	if (!Character)
+	ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner());
+	if (!OwnerCharacter)
 	{
 		return;
 	}
@@ -209,14 +282,14 @@ void UNartyCombatComponent::PlayAttackAnimation()
 		AttackComboIndex++;
 		if (Montage)
 		{
-			Character->PlayAnimMontage(Montage, bHasForgeWeapon ? 1.05f : 1.2f);
+			OwnerCharacter->PlayAnimMontage(Montage, bHasForgeWeapon ? 1.05f : 1.2f);
 			return;
 		}
 	}
 
 	if (AttackSequences.Num() > 0)
 	{
-		if (USkeletalMeshComponent* Mesh = Character->GetMesh())
+		if (USkeletalMeshComponent* Mesh = OwnerCharacter->GetMesh())
 		{
 			if (UAnimInstance* Anim = Mesh->GetAnimInstance())
 			{
