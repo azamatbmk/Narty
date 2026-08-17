@@ -6,6 +6,7 @@
 
 class UStaticMeshComponent;
 class UTextRenderComponent;
+class UNartyHealthComponent;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnNartyDummyDefeated, AActor*, Dummy);
 
@@ -23,7 +24,7 @@ public:
 	float ReceiveStrike(float Damage, AActor* InstigatorActor);
 
 	UFUNCTION(BlueprintPure, Category = "Narty|Combat")
-	float GetHealth() const { return Health; }
+	float GetHealth() const;
 
 	UFUNCTION(BlueprintCallable, Category = "Narty|Combat")
 	void SetMaxHealth(float InMaxHealth);
@@ -39,11 +40,14 @@ protected:
 	UPROPERTY(VisibleAnywhere)
 	TObjectPtr<UTextRenderComponent> HPLabel;
 
-	UPROPERTY(EditAnywhere, Category = "Narty|Combat")
-	float MaxHealth = 100.f;
-
 	UPROPERTY(VisibleAnywhere, Category = "Narty|Combat")
-	float Health = 100.f;
+	TObjectPtr<UNartyHealthComponent> Health;
 
 	void RefreshLabel();
+
+	UFUNCTION()
+	void HandleHealthChanged(float InHealth, float InMaxHealth);
+
+	UFUNCTION()
+	void HandleDied(AActor* DeadActor, AActor* Killer);
 };

@@ -3,7 +3,9 @@
 #include "NartyHeroSelectWidget.h"
 #include "NartyObjectiveWidget.h"
 #include "NartyEndingWidget.h"
-#include "NartyPrototypeArena.h"
+#include "NartyHealthWidget.h"
+#include "NartyGorgeLayout.h"
+#include "NartyHealthComponent.h"
 #include "NartyMountainFireActor.h"
 #include "NartySettlementHearthActor.h"
 #include "NartyUatsamongaCup.h"
@@ -27,9 +29,8 @@ void UNartyGameInstance::OnStart()
 
 	if (UWorld* World = GetWorld())
 	{
-		PrototypeArena = ANartyPrototypeArena::EnsureInWorld(World);
 		World->GetTimerManager().SetTimerForNextTick(
-			FTimerDelegate::CreateUObject(this, &UNartyGameInstance::BootstrapPrototype));
+			FTimerDelegate::CreateUObject(this, &UNartyGameInstance::BootstrapGorge));
 	}
 }
 
@@ -43,13 +44,11 @@ void UNartyGameInstance::LoadComplete(const float LoadTime, const FString& MapNa
 	}
 
 	bRestartPending = false;
-	PrototypeArena = nullptr;
 
 	if (UWorld* World = GetWorld())
 	{
-		PrototypeArena = ANartyPrototypeArena::EnsureInWorld(World);
 		World->GetTimerManager().SetTimerForNextTick(
-			FTimerDelegate::CreateUObject(this, &UNartyGameInstance::BootstrapPrototype));
+			FTimerDelegate::CreateUObject(this, &UNartyGameInstance::BootstrapGorge));
 	}
 }
 
@@ -75,24 +74,37 @@ void UNartyGameInstance::ResetCampaignState()
 	}
 	ObjectiveWidget = nullptr;
 
+	if (IsValid(HealthWidget))
+	{
+		HealthWidget->RemoveFromParent();
+	}
+	HealthWidget = nullptr;
+	bPlayerHealthBound = false;
+
 	HideEndingScreen();
-	PrototypeArena = nullptr;
 
 	if (UWorld* World = GetWorld())
 	{
 		World->GetTimerManager().ClearTimer(HeroSelectRetryHandle);
-		World->GetTimerManager().ClearTimer(ArenaRetryHandle);
+		World->GetTimerManager().ClearTimer(PlayerReadyRetryHandle);
 		World->GetTimerManager().ClearTimer(ApplyHeroRetryHandle);
+		World->GetTimerManager().ClearTimer(RespawnHandle);
 	}
 }
 
-void UNartyGameInstance::BootstrapPrototype()
+void UNartyGameInstance::BootstrapGorge()
 {
-	EnsureArenaAndTeleport();
+	if (UWorld* World = GetWorld())
+	{
+		NartyGorgeLayout::SpawnMissingStoryActors(World);
+		NartyGorgeLayout::EnsureReadableWorldLighting(World);
+	}
+
+	EnsurePlayerReady();
 	ShowHeroSelectMenu();
 }
 
-void UNartyGameInstance::EnsureArenaAndTeleport()
+void UNartyGameInstance::EnsurePlayerReady()
 {
 	UWorld* World = GetWorld();
 	if (!World)
@@ -100,33 +112,21 @@ void UNartyGameInstance::EnsureArenaAndTeleport()
 		return;
 	}
 
-	if (!PrototypeArena)
-	{
-		PrototypeArena = ANartyPrototypeArena::EnsureInWorld(World);
-	}
-
 	APlayerController* PC = World->GetFirstPlayerController();
 	if (!PC || !PC->GetPawn())
 	{
 		World->GetTimerManager().SetTimer(
-			ArenaRetryHandle,
+			PlayerReadyRetryHandle,
 			this,
-			&UNartyGameInstance::EnsureArenaAndTeleport,
+			&UNartyGameInstance::EnsurePlayerReady,
 			0.1f,
 			false);
 		return;
 	}
 
-	if (PrototypeArena)
+	if (ACharacter* Character = Cast<ACharacter>(PC->GetPawn()))
 	{
-		const FTransform Start = PrototypeArena->GetPlayerStartTransform();
-		PC->GetPawn()->SetActorTransform(Start, false, nullptr, ETeleportType::TeleportPhysics);
-		PC->SetControlRotation(Start.Rotator());
-
-		if (ACharacter* Character = Cast<ACharacter>(PC->GetPawn()))
-		{
-			UNartyInteractComponent::EnsureOn(Character);
-		}
+		UNartyInteractComponent::EnsureOn(Character);
 	}
 }
 
@@ -145,6 +145,7 @@ FNartyHeroStats UNartyGameInstance::GetStatsForHero(ENartyHero Hero) const
 		Stats.MaxWalkSpeed = 700.f;
 		Stats.JumpZVelocity = 750.f;
 		Stats.Tint = FLinearColor(1.f, 0.85f, 0.35f);
+		Stats.MaxHealth = 100.f;
 		Stats.DisplayName = NSLOCTEXT("Narty", "Hero_Soslan", "\u0421\u043e\u0441\u043b\u0430\u043d");
 		break;
 
@@ -152,6 +153,7 @@ FNartyHeroStats UNartyGameInstance::GetStatsForHero(ENartyHero Hero) const
 		Stats.MaxWalkSpeed = 450.f;
 		Stats.JumpZVelocity = 520.f;
 		Stats.Tint = FLinearColor(0.55f, 0.6f, 0.7f);
+		Stats.MaxHealth = 140.f;
 		Stats.DisplayName = NSLOCTEXT("Narty", "Hero_Batraz", "\u0411\u0430\u0442\u0440\u0430\u0437");
 		break;
 
@@ -159,6 +161,7 @@ FNartyHeroStats UNartyGameInstance::GetStatsForHero(ENartyHero Hero) const
 		Stats.MaxWalkSpeed = 560.f;
 		Stats.JumpZVelocity = 650.f;
 		Stats.Tint = FLinearColor(0.45f, 0.75f, 0.55f);
+		Stats.MaxHealth = 85.f;
 		Stats.DisplayName = NSLOCTEXT("Narty", "Hero_Syrdon", "\u0421\u044b\u0440\u0434\u043e\u043d");
 		break;
 
@@ -254,7 +257,7 @@ void UNartyGameInstance::HandleHeroChosen(ENartyHero Hero)
 {
 	SetSelectedHero(Hero);
 	HideHeroSelectMenu();
-	EnsureArenaAndTeleport();
+	EnsurePlayerReady();
 	ApplySelectedHeroToLocalPawn();
 }
 
@@ -348,13 +351,152 @@ void UNartyGameInstance::ApplyHeroToCharacter(ACharacter* HeroCharacter, ENartyH
 	}
 	Combat->SetHero(Hero);
 
+	UNartyHealthComponent* Health = HeroCharacter->FindComponentByClass<UNartyHealthComponent>();
+	const bool bCreatedHealth = (Health == nullptr);
+	if (!Health)
+	{
+		Health = NewObject<UNartyHealthComponent>(HeroCharacter, TEXT("NartyHealth"));
+		Health->RegisterComponent();
+		HeroCharacter->AddInstanceComponent(Health);
+	}
+	Health->HitInvulnSeconds = 0.4f;
+	Health->SetMaxHealth(Stats.MaxHealth, bCreatedHealth);
+
+	if (!bPlayerHealthBound)
+	{
+		Health->OnDied.AddDynamic(this, &UNartyGameInstance::HandlePlayerDied);
+		Health->OnHealthChanged.AddDynamic(this, &UNartyGameInstance::HandlePlayerHealthChanged);
+		bPlayerHealthBound = true;
+	}
+
 	UNartyInteractComponent::EnsureOn(HeroCharacter);
 
-	UE_LOG(LogTemp, Warning, TEXT("Narty: hero applied -> %s (speed=%.0f)"),
-		*Stats.DisplayName.ToString(), Stats.MaxWalkSpeed);
+	UE_LOG(LogTemp, Warning, TEXT("Narty: hero applied -> %s (speed=%.0f hp=%.0f)"),
+		*Stats.DisplayName.ToString(), Stats.MaxWalkSpeed, Stats.MaxHealth);
 
 	EnsureObjectiveWidget();
+	EnsureHealthWidget();
 	UpdateObjectiveUI();
+	HandlePlayerHealthChanged(Health->GetHealth(), Health->GetMaxHealth());
+}
+
+void UNartyGameInstance::EnsureHealthWidget()
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	APlayerController* PC = World->GetFirstPlayerController();
+	if (!PC)
+	{
+		return;
+	}
+
+	if (!IsValid(HealthWidget))
+	{
+		HealthWidget = CreateWidget<UNartyHealthWidget>(PC, UNartyHealthWidget::StaticClass());
+	}
+
+	if (IsValid(HealthWidget) && !HealthWidget->IsInViewport())
+	{
+		HealthWidget->AddToViewport(40);
+	}
+}
+
+void UNartyGameInstance::HandlePlayerHealthChanged(float Health, float MaxHealth)
+{
+	EnsureHealthWidget();
+	if (HealthWidget)
+	{
+		HealthWidget->SetHealth(Health, MaxHealth);
+	}
+}
+
+void UNartyGameInstance::HandlePlayerDied(AActor* DeadActor, AActor* /*Killer*/)
+{
+	if (QuestStage == ENartyQuestStage::Completed)
+	{
+		return;
+	}
+
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	if (APlayerController* PC = World->GetFirstPlayerController())
+	{
+		APawn* Pawn = Cast<APawn>(DeadActor);
+		if (!Pawn)
+		{
+			Pawn = PC->GetPawn();
+		}
+		if (Pawn)
+		{
+			Pawn->DisableInput(PC);
+			if (ACharacter* Character = Cast<ACharacter>(Pawn))
+			{
+				if (UCharacterMovementComponent* Move = Character->GetCharacterMovement())
+				{
+					Move->StopMovementImmediately();
+					Move->DisableMovement();
+				}
+			}
+
+			if (UNartyCombatComponent* Combat = Pawn->FindComponentByClass<UNartyCombatComponent>())
+			{
+				Combat->CancelPendingStrike();
+			}
+		}
+	}
+
+	UE_LOG(LogTemp, Warning, TEXT("Narty: player died — respawn at nykhas"));
+	World->GetTimerManager().SetTimer(
+		RespawnHandle,
+		this,
+		&UNartyGameInstance::RespawnPlayerAtNykhas,
+		0.45f,
+		false);
+}
+
+void UNartyGameInstance::RespawnPlayerAtNykhas()
+{
+	UWorld* World = GetWorld();
+	APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
+	APawn* Pawn = PC ? PC->GetPawn() : nullptr;
+	if (!World || !PC || !Pawn)
+	{
+		return;
+	}
+
+	const FTransform Start = NartyGorgeLayout::FindNykhasStart(World);
+	Pawn->SetActorTransform(Start, false, nullptr, ETeleportType::TeleportPhysics);
+	PC->SetControlRotation(Start.Rotator());
+
+	if (ACharacter* Character = Cast<ACharacter>(Pawn))
+	{
+		if (UCharacterMovementComponent* Move = Character->GetCharacterMovement())
+		{
+			Move->SetMovementMode(MOVE_Walking);
+			if (HasSelectedHero())
+			{
+				const FNartyHeroStats Stats = GetSelectedHeroStats();
+				Move->MaxWalkSpeed = Stats.MaxWalkSpeed;
+				Move->JumpZVelocity = Stats.JumpZVelocity;
+			}
+		}
+	}
+
+	if (UNartyHealthComponent* Health = Pawn->FindComponentByClass<UNartyHealthComponent>())
+	{
+		Health->ResetToFull(1.6f);
+	}
+
+	Pawn->EnableInput(PC);
+	EnsurePlayerReady();
 }
 
 void UNartyGameInstance::EnsureObjectiveWidget()
@@ -526,17 +668,9 @@ void UNartyGameInstance::StartFireQuest()
 	QuestStage = ENartyQuestStage::FetchFire;
 	bHasMountainFire = false;
 
-	if (!PrototypeArena)
+	if (ANartyMountainFireActor* Fire = NartyGorgeLayout::GetMountainFire(GetWorld()))
 	{
-		PrototypeArena = ANartyPrototypeArena::EnsureInWorld(GetWorld());
-	}
-
-	if (PrototypeArena)
-	{
-		if (ANartyMountainFireActor* Fire = PrototypeArena->GetMountainFire())
-		{
-			Fire->ActivateForQuest();
-		}
+		Fire->ActivateForQuest();
 	}
 
 	UpdateObjectiveUI();
@@ -548,12 +682,9 @@ void UNartyGameInstance::NotifyFireTaken()
 	bHasMountainFire = true;
 	QuestStage = ENartyQuestStage::ReturnFire;
 
-	if (PrototypeArena)
+	if (ANartySettlementHearthActor* Hearth = NartyGorgeLayout::GetHearth(GetWorld()))
 	{
-		if (ANartySettlementHearthActor* Hearth = PrototypeArena->GetHearth())
-		{
-			Hearth->ActivateReturnObjective();
-		}
+		Hearth->ActivateReturnObjective();
 	}
 
 	UpdateObjectiveUI();
@@ -569,12 +700,9 @@ void UNartyGameInstance::NotifyFireReturned()
 
 	bHasMountainFire = false;
 
-	if (PrototypeArena)
+	if (ANartySettlementHearthActor* Hearth = NartyGorgeLayout::GetHearth(GetWorld()))
 	{
-		if (ANartySettlementHearthActor* Hearth = PrototypeArena->GetHearth())
-		{
-			Hearth->CompleteWithFire();
-		}
+		Hearth->CompleteWithFire();
 	}
 
 	StartUatsamongaQuest();
@@ -585,17 +713,9 @@ void UNartyGameInstance::StartUatsamongaQuest()
 {
 	QuestStage = ENartyQuestStage::Uatsamonga;
 
-	if (!PrototypeArena)
+	if (ANartyUatsamongaCup* Cup = NartyGorgeLayout::GetUatsamongaCup(GetWorld()))
 	{
-		PrototypeArena = ANartyPrototypeArena::EnsureInWorld(GetWorld());
-	}
-
-	if (PrototypeArena)
-	{
-		if (ANartyUatsamongaCup* Cup = PrototypeArena->GetUatsamongaCup())
-		{
-			Cup->ActivateForQuest();
-		}
+		Cup->ActivateForQuest();
 	}
 
 	UpdateObjectiveUI();
@@ -613,17 +733,9 @@ void UNartyGameInstance::StartHeroTrial()
 {
 	QuestStage = ENartyQuestStage::HeroTrial;
 
-	if (!PrototypeArena)
+	if (ANartyHeroTrialSite* Trial = NartyGorgeLayout::GetHeroTrialSite(GetWorld()))
 	{
-		PrototypeArena = ANartyPrototypeArena::EnsureInWorld(GetWorld());
-	}
-
-	if (PrototypeArena)
-	{
-		if (ANartyHeroTrialSite* Trial = PrototypeArena->GetHeroTrialSite())
-		{
-			Trial->ActivateForHero(SelectedHero);
-		}
+		Trial->ActivateForHero(SelectedHero);
 	}
 
 	UpdateObjectiveUI();
@@ -640,17 +752,9 @@ void UNartyGameInstance::StartFinale()
 {
 	QuestStage = ENartyQuestStage::Finale;
 
-	if (!PrototypeArena)
+	if (ANartyFinaleSite* Finale = NartyGorgeLayout::GetFinaleSite(GetWorld()))
 	{
-		PrototypeArena = ANartyPrototypeArena::EnsureInWorld(GetWorld());
-	}
-
-	if (PrototypeArena)
-	{
-		if (ANartyFinaleSite* Finale = PrototypeArena->GetFinaleSite())
-		{
-			Finale->ActivateFinale();
-		}
+		Finale->ActivateFinale();
 	}
 
 	UpdateObjectiveUI();

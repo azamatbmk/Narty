@@ -2,6 +2,7 @@
 
 #include "NartyInteractable.h"
 #include "NartyInteractPromptWidget.h"
+#include "NartyHealthComponent.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "InputAction.h"
@@ -228,6 +229,14 @@ void UNartyInteractComponent::HandleInteractStarted()
 	if (!OwnerCharacter)
 	{
 		return;
+	}
+
+	if (const UNartyHealthComponent* Health = OwnerCharacter->FindComponentByClass<UNartyHealthComponent>())
+	{
+		if (Health->IsDead())
+		{
+			return;
+		}
 	}
 
 	for (int32 i = InteractFocusStack.Num() - 1; i >= 0; --i)

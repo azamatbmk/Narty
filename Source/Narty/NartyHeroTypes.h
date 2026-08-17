@@ -27,5 +27,8 @@ struct FNartyHeroStats
 	FLinearColor Tint = FLinearColor::White;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	float MaxHealth = 100.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	FText DisplayName;
 };

@@ -9,10 +9,11 @@
 class UNartyHeroSelectWidget;
 class UNartyObjectiveWidget;
 class UNartyEndingWidget;
+class UNartyHealthWidget;
 class APlayerController;
 class ACharacter;
-class ANartyPrototypeArena;
 class UNartyCombatComponent;
+class UNartyHealthComponent;
 
 UCLASS()
 class NARTY_API UNartyGameInstance : public UGameInstance
@@ -96,15 +97,23 @@ protected:
 	void ShowHeroSelectMenu();
 	void HideHeroSelectMenu();
 	void ApplyHeroToCharacter(ACharacter* HeroCharacter, ENartyHero Hero);
-	void EnsureArenaAndTeleport();
-	void BootstrapPrototype();
+	void EnsurePlayerReady();
+	void BootstrapGorge();
 	void EnsureObjectiveWidget();
+	void EnsureHealthWidget();
 	void UpdateObjectiveUI();
 	void ShowEndingScreen(ENartyEnding Ending);
 	void HideEndingScreen();
 	void ResetCampaignState();
 	void GetEndingTexts(ENartyEnding Ending, FText& OutTitle, FText& OutBody) const;
 	FText GetHeroFireHint() const;
+	void RespawnPlayerAtNykhas();
+
+	UFUNCTION()
+	void HandlePlayerDied(AActor* DeadActor, AActor* Killer);
+
+	UFUNCTION()
+	void HandlePlayerHealthChanged(float Health, float MaxHealth);
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Narty|Hero")
 	ENartyHero SelectedHero = ENartyHero::None;
@@ -137,11 +146,13 @@ protected:
 	TObjectPtr<UNartyEndingWidget> EndingWidget;
 
 	UPROPERTY()
-	TObjectPtr<ANartyPrototypeArena> PrototypeArena;
+	TObjectPtr<UNartyHealthWidget> HealthWidget;
 
 	FTimerHandle HeroSelectRetryHandle;
-	FTimerHandle ArenaRetryHandle;
+	FTimerHandle PlayerReadyRetryHandle;
 	FTimerHandle ApplyHeroRetryHandle;
+	FTimerHandle RespawnHandle;
 
 	bool bRestartPending = false;
+	bool bPlayerHealthBound = false;
 };

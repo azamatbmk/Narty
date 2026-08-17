@@ -45,6 +45,7 @@ def main():
     )
     if start:
         start.set_actor_label("PlayerStart_Narty")
+        start.set_editor_property("tags", ["NartyPlayerStart"])
 
     # Soft floor light so PIE isn't pitch black before arena builds
     light = unreal.EditorLevelLibrary.spawn_actor_from_class(
@@ -54,6 +55,11 @@ def main():
     )
     if light:
         light.set_actor_label("Sun_Narty")
+        light.set_actor_rotation(unreal.Rotator(-42.0, 35.0, 0.0), False)
+        sun_comp = light.get_component_by_class(unreal.DirectionalLightComponent)
+        if sun_comp:
+            sun_comp.set_intensity(12.0)
+            sun_comp.set_light_color(unreal.LinearColor(1.0, 0.94, 0.82, 1.0))
 
     sky = unreal.EditorLevelLibrary.spawn_actor_from_class(
         unreal.SkyAtmosphere,

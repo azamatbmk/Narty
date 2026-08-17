@@ -30,6 +30,8 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Narty|Combat")
 	bool HasForgeWeapon() const { return bHasForgeWeapon; }
 
+	void CancelPendingStrike();
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;

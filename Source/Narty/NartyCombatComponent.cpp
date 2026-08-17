@@ -1,6 +1,6 @@
 #include "NartyCombatComponent.h"
 
-#include "NartyTrainingDummy.h"
+#include "NartyHealthComponent.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/PlayerController.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -237,6 +237,14 @@ void UNartyCombatComponent::EnsureAttackInput()
 	}
 }
 
+void UNartyCombatComponent::CancelPendingStrike()
+{
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(StrikeDelayHandle);
+	}
+}
+
 void UNartyCombatComponent::HandleAttackStarted()
 {
 	TryAttack();
@@ -248,6 +256,17 @@ void UNartyCombatComponent::TryAttack()
 	if (!World)
 	{
 		return;
+	}
+
+	if (AActor* OwnerActor = GetOwner())
+	{
+		if (const UNartyHealthComponent* Health = OwnerActor->FindComponentByClass<UNartyHealthComponent>())
+		{
+			if (Health->IsDead())
+			{
+				return;
+			}
+		}
 	}
 
 	const float Now = World->GetTimeSeconds();
@@ -314,6 +333,14 @@ void UNartyCombatComponent::PerformStrike()
 		return;
 	}
 
+	if (const UNartyHealthComponent* Health = OwnerActor->FindComponentByClass<UNartyHealthComponent>())
+	{
+		if (Health->IsDead())
+		{
+			return;
+		}
+	}
+
 	const float Range = bHasForgeWeapon ? AttackRange + 30.f : AttackRange;
 	const FVector Start = OwnerActor->GetActorLocation() + FVector(0.f, 0.f, 40.f);
 	const FVector End = Start + OwnerActor->GetActorForwardVector() * Range;
@@ -347,9 +374,9 @@ void UNartyCombatComponent::PerformStrike()
 		}
 		Damaged.Add(HitActor);
 
-		if (ANartyTrainingDummy* Dummy = Cast<ANartyTrainingDummy>(HitActor))
+		if (UNartyHealthComponent* HitHealth = HitActor->FindComponentByClass<UNartyHealthComponent>())
 		{
-			Dummy->ReceiveStrike(AttackDamage, OwnerActor);
+			HitHealth->ApplyDamage(AttackDamage, OwnerActor);
 		}
 	}
 }
