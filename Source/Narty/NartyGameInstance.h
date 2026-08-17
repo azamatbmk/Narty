@@ -108,6 +108,8 @@ protected:
 	void GetEndingTexts(ENartyEnding Ending, FText& OutTitle, FText& OutBody) const;
 	FText GetHeroFireHint() const;
 	void RespawnPlayerAtNykhas();
+	void StartFallCatch();
+	void CheckFallenOutOfWorld();
 
 	UFUNCTION()
 	void HandlePlayerDied(AActor* DeadActor, AActor* Killer);
@@ -152,6 +154,7 @@ protected:
 	FTimerHandle PlayerReadyRetryHandle;
 	FTimerHandle ApplyHeroRetryHandle;
 	FTimerHandle RespawnHandle;
+	FTimerHandle FallCatchHandle;
 
 	bool bRestartPending = false;
 	bool bPlayerHealthBound = false;

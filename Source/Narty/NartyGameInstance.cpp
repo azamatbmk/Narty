@@ -89,6 +89,7 @@ void UNartyGameInstance::ResetCampaignState()
 		World->GetTimerManager().ClearTimer(PlayerReadyRetryHandle);
 		World->GetTimerManager().ClearTimer(ApplyHeroRetryHandle);
 		World->GetTimerManager().ClearTimer(RespawnHandle);
+		World->GetTimerManager().ClearTimer(FallCatchHandle);
 	}
 }
 
@@ -101,6 +102,7 @@ void UNartyGameInstance::BootstrapGorge()
 	}
 
 	EnsurePlayerReady();
+	StartFallCatch();
 	ShowHeroSelectMenu();
 }
 
@@ -128,6 +130,53 @@ void UNartyGameInstance::EnsurePlayerReady()
 	{
 		UNartyInteractComponent::EnsureOn(Character);
 	}
+
+	StartFallCatch();
+}
+
+void UNartyGameInstance::StartFallCatch()
+{
+	UWorld* World = GetWorld();
+	if (!World || World->GetTimerManager().IsTimerActive(FallCatchHandle))
+	{
+		return;
+	}
+
+	World->GetTimerManager().SetTimer(
+		FallCatchHandle,
+		this,
+		&UNartyGameInstance::CheckFallenOutOfWorld,
+		0.2f,
+		true);
+}
+
+void UNartyGameInstance::CheckFallenOutOfWorld()
+{
+	if (QuestStage == ENartyQuestStage::Completed)
+	{
+		return;
+	}
+
+	UWorld* World = GetWorld();
+	APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
+	APawn* Pawn = PC ? PC->GetPawn() : nullptr;
+	if (!Pawn)
+	{
+		return;
+	}
+
+	if (Pawn->GetActorLocation().Z > -150.f)
+	{
+		return;
+	}
+
+	if (World->GetTimerManager().IsTimerActive(RespawnHandle))
+	{
+		return;
+	}
+
+	UE_LOG(LogTemp, Warning, TEXT("Narty: fell out of gorge — return to nykhas"));
+	RespawnPlayerAtNykhas();
 }
 
 void UNartyGameInstance::SetSelectedHero(ENartyHero Hero)
