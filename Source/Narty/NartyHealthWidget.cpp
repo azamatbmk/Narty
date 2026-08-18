@@ -10,6 +10,14 @@
 #include "Components/OverlaySlot.h"
 #include "Components/SizeBox.h"
 
+void UNartyHealthWidget::SetAbilityLine(const FText& Line)
+{
+	if (AbilityText)
+	{
+		AbilityText->SetText(Line);
+	}
+}
+
 void UNartyHealthWidget::SetHealth(float Health, float MaxHealth)
 {
 	const float SafeMax = FMath::Max(1.f, MaxHealth);
@@ -77,6 +85,16 @@ void UNartyHealthWidget::BuildLayout()
 	if (UVerticalBoxSlot* BarSlot = Box->AddChildToVerticalBox(HealthBar))
 	{
 		BarSlot->SetPadding(FMargin(0.f, 8.f, 0.f, 0.f));
+	}
+
+	AbilityText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("AbilityText"));
+	FSlateFontInfo AbilityFont = AbilityText->GetFont();
+	AbilityFont.Size = 13;
+	AbilityText->SetFont(AbilityFont);
+	AbilityText->SetColorAndOpacity(FSlateColor(FLinearColor(0.85f, 0.78f, 0.55f)));
+	if (UVerticalBoxSlot* AbilitySlot = Box->AddChildToVerticalBox(AbilityText))
+	{
+		AbilitySlot->SetPadding(FMargin(0.f, 8.f, 0.f, 0.f));
 	}
 
 	SetHealth(100.f, 100.f);

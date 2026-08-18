@@ -101,6 +101,25 @@ void ANartyFinaleSite::ActivateFinale()
 	UE_LOG(LogTemp, Warning, TEXT("Narty: finale sanctum activated"));
 }
 
+void ANartyFinaleSite::RestoreFromSave(bool bActive, bool bResolvedState)
+{
+	if (bActive)
+	{
+		ActivateFinale();
+	}
+
+	if (bResolvedState)
+	{
+		bActive = true;
+		bResolved = true;
+		SetActorHiddenInGame(false);
+		SetActorEnableCollision(true);
+		BuildSanctum();
+		Label->SetText(NSLOCTEXT("Narty", "Finale_Resolved", "\u041a\u043e\u043d\u0435\u0446 \u043d\u0430\u0440\u0442\u043e\u0432 \u2014 \u043f\u0440\u043e\u0439\u0434\u0435\u043d"));
+		Label->SetTextRenderColor(FColor(180, 200, 140));
+	}
+}
+
 void ANartyFinaleSite::BuildSanctum()
 {
 	// Visual already set in constructor; tint altar warm.

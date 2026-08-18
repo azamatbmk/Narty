@@ -2,6 +2,7 @@
 
 #include "NartyHealthComponent.h"
 #include "GameFramework/Character.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -16,11 +17,14 @@
 #include "Engine/World.h"
 #include "TimerManager.h"
 #include "DrawDebugHelpers.h"
+#include "CollisionQueryParams.h"
+#include "Engine/OverlapResult.h"
 #include "UObject/ConstructorHelpers.h"
 
 UNartyCombatComponent::UNartyCombatComponent()
 {
-	PrimaryComponentTick.bCanEverTick = false;
+	PrimaryComponentTick.bCanEverTick = true;
+	PrimaryComponentTick.bStartWithTickEnabled = true;
 
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> CubeMesh(TEXT("/Engine/BasicShapes/Cube.Cube"));
 	if (CubeMesh.Succeeded())
@@ -62,6 +66,7 @@ void UNartyCombatComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	if (UWorld* World = GetWorld())
 	{
 		World->GetTimerManager().ClearTimer(StrikeDelayHandle);
+		World->GetTimerManager().ClearTimer(AbilityEndHandle);
 		World->GetTimerManager().ClearAllTimersForObject(this);
 	}
 
@@ -105,24 +110,28 @@ void UNartyCombatComponent::SetHero(ENartyHero InHero)
 		AttackRadius = 40.f;
 		AttackDamage = bHasForgeWeapon ? 40.f : 28.f;
 		AttackCooldown = 0.32f;
+		AbilityCooldown = 5.f;
 		break;
 	case ENartyHero::Batraz:
 		AttackRange = 170.f;
 		AttackRadius = 55.f;
 		AttackDamage = bHasForgeWeapon ? 65.f : 45.f;
 		AttackCooldown = 0.7f;
+		AbilityCooldown = 8.f;
 		break;
 	case ENartyHero::Syrdon:
 		AttackRange = 130.f;
 		AttackRadius = 35.f;
 		AttackDamage = bHasForgeWeapon ? 32.f : 20.f;
 		AttackCooldown = 0.4f;
+		AbilityCooldown = 9.f;
 		break;
 	default:
 		break;
 	}
 
 	EnsureAttackInput();
+	NotifyAbilityHud();
 }
 
 void UNartyCombatComponent::GrantForgeWeapon()
@@ -181,11 +190,19 @@ void UNartyCombatComponent::EnsureAttackInput()
 		AttackAction->ValueType = EInputActionValueType::Boolean;
 	}
 
+	if (!AbilityAction)
+	{
+		AbilityAction = NewObject<UInputAction>(this, TEXT("IA_NartyAbility"));
+		AbilityAction->ValueType = EInputActionValueType::Boolean;
+	}
+
 	if (!AttackMappingContext)
 	{
 		AttackMappingContext = NewObject<UInputMappingContext>(this, TEXT("IMC_NartyAttack"));
 		AttackMappingContext->MapKey(AttackAction, EKeys::LeftMouseButton);
 		AttackMappingContext->MapKey(AttackAction, EKeys::LeftControl);
+		AttackMappingContext->MapKey(AbilityAction, EKeys::Q);
+		AttackMappingContext->MapKey(AbilityAction, EKeys::Gamepad_FaceButton_Left);
 	}
 
 	ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner());
@@ -214,7 +231,7 @@ void UNartyCombatComponent::EnsureAttackInput()
 		}
 	}
 
-	if (bInputBound || !AttackAction)
+	if (bInputBound && bAbilityBound)
 	{
 		return;
 	}
@@ -227,8 +244,16 @@ void UNartyCombatComponent::EnsureAttackInput()
 
 	if (UEnhancedInputComponent* EIC = Cast<UEnhancedInputComponent>(IC))
 	{
-		EIC->BindAction(AttackAction, ETriggerEvent::Started, this, &UNartyCombatComponent::HandleAttackStarted);
-		bInputBound = true;
+		if (!bInputBound && AttackAction)
+		{
+			EIC->BindAction(AttackAction, ETriggerEvent::Started, this, &UNartyCombatComponent::HandleAttackStarted);
+			bInputBound = true;
+		}
+		if (!bAbilityBound && AbilityAction)
+		{
+			EIC->BindAction(AbilityAction, ETriggerEvent::Started, this, &UNartyCombatComponent::HandleAbilityStarted);
+			bAbilityBound = true;
+		}
 	}
 	else if (UWorld* World = GetWorld())
 	{
@@ -242,7 +267,11 @@ void UNartyCombatComponent::CancelPendingStrike()
 	if (UWorld* World = GetWorld())
 	{
 		World->GetTimerManager().ClearTimer(StrikeDelayHandle);
+		World->GetTimerManager().ClearTimer(AbilityEndHandle);
 	}
+	EndSoslanDash();
+	EndBatrazFortitude();
+	EndSyrdonStealth();
 }
 
 void UNartyCombatComponent::HandleAttackStarted()
@@ -326,22 +355,19 @@ void UNartyCombatComponent::PlayAttackAnimation()
 
 void UNartyCombatComponent::PerformStrike()
 {
+	const float Range = bHasForgeWeapon ? AttackRange + 30.f : AttackRange;
+	DealStrikeDamage(AttackDamage, Range, AttackRadius);
+}
+
+void UNartyCombatComponent::DealStrikeDamage(float Damage, float Range, float Radius)
+{
 	AActor* OwnerActor = GetOwner();
 	UWorld* World = GetWorld();
-	if (!OwnerActor || !World)
+	if (!OwnerActor || !World || IsOwnerDead())
 	{
 		return;
 	}
 
-	if (const UNartyHealthComponent* Health = OwnerActor->FindComponentByClass<UNartyHealthComponent>())
-	{
-		if (Health->IsDead())
-		{
-			return;
-		}
-	}
-
-	const float Range = bHasForgeWeapon ? AttackRange + 30.f : AttackRange;
 	const FVector Start = OwnerActor->GetActorLocation() + FVector(0.f, 0.f, 40.f);
 	const FVector End = Start + OwnerActor->GetActorForwardVector() * Range;
 
@@ -350,17 +376,17 @@ void UNartyCombatComponent::PerformStrike()
 
 	World->SweepMultiByChannel(
 		Hits, Start, End, FQuat::Identity, ECC_Pawn,
-		FCollisionShape::MakeSphere(AttackRadius), Params);
+		FCollisionShape::MakeSphere(Radius), Params);
 
 	TArray<FHitResult> WorldHits;
 	World->SweepMultiByChannel(
 		WorldHits, Start, End, FQuat::Identity, ECC_WorldDynamic,
-		FCollisionShape::MakeSphere(AttackRadius), Params);
+		FCollisionShape::MakeSphere(Radius), Params);
 	Hits.Append(WorldHits);
 
 	const FColor DebugColor = bHasForgeWeapon ? FColor::Red : FColor::Orange;
 #if ENABLE_DRAW_DEBUG
-	DrawDebugSphere(World, End, AttackRadius, 12, DebugColor, false, 0.2f);
+	DrawDebugSphere(World, End, Radius, 12, DebugColor, false, 0.2f);
 	DrawDebugLine(World, Start, End, DebugColor, false, 0.2f, 0, 2.f);
 #endif
 
@@ -376,7 +402,267 @@ void UNartyCombatComponent::PerformStrike()
 
 		if (UNartyHealthComponent* HitHealth = HitActor->FindComponentByClass<UNartyHealthComponent>())
 		{
-			HitHealth->ApplyDamage(AttackDamage, OwnerActor);
+			HitHealth->ApplyDamage(Damage, OwnerActor);
 		}
 	}
+}
+
+bool UNartyCombatComponent::IsOwnerDead() const
+{
+	const AActor* OwnerActor = GetOwner();
+	if (!OwnerActor)
+	{
+		return true;
+	}
+
+	if (const UNartyHealthComponent* Health = OwnerActor->FindComponentByClass<UNartyHealthComponent>())
+	{
+		return Health->IsDead();
+	}
+
+	return false;
+}
+
+void UNartyCombatComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
+{
+	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+
+	if (bDashing)
+	{
+		SweepDashHits();
+	}
+
+	NotifyAbilityHud();
+}
+
+void UNartyCombatComponent::HandleAbilityStarted()
+{
+	TryAbility();
+}
+
+void UNartyCombatComponent::TryAbility()
+{
+	UWorld* World = GetWorld();
+	if (!World || IsOwnerDead())
+	{
+		return;
+	}
+
+	const float Now = World->GetTimeSeconds();
+	if (Now - LastAbilityTime < AbilityCooldown)
+	{
+		return;
+	}
+
+	switch (Hero)
+	{
+	case ENartyHero::Soslan:
+		ActivateSoslanDash();
+		break;
+	case ENartyHero::Batraz:
+		ActivateBatrazFortitude();
+		break;
+	case ENartyHero::Syrdon:
+		ActivateSyrdonStealth();
+		break;
+	default:
+		return;
+	}
+
+	LastAbilityTime = Now;
+	NotifyAbilityHud();
+}
+
+FText UNartyCombatComponent::GetAbilityLine() const
+{
+	FText Name;
+	switch (Hero)
+	{
+	case ENartyHero::Soslan:
+		Name = NSLOCTEXT("Narty", "Ability_Soslan", "Q \u2014 \u0440\u044b\u0432\u043e\u043a-\u0436\u0430\u0440");
+		break;
+	case ENartyHero::Batraz:
+		Name = NSLOCTEXT("Narty", "Ability_Batraz", "Q \u2014 \u0436\u0435\u043b\u0435\u0437\u043e");
+		break;
+	case ENartyHero::Syrdon:
+		Name = NSLOCTEXT("Narty", "Ability_Syrdon", "Q \u2014 \u0442\u0435\u043d\u044c");
+		break;
+	default:
+		return FText::GetEmpty();
+	}
+
+	const UWorld* World = GetWorld();
+	const float Now = World ? World->GetTimeSeconds() : 0.f;
+	const float Remaining = AbilityCooldown - (Now - LastAbilityTime);
+	if (Remaining > 0.05f && LastAbilityTime > 0.f)
+	{
+		return FText::Format(
+			NSLOCTEXT("Narty", "Ability_CD", "{0}  ({1}\u0441)"),
+			Name,
+			FText::AsNumber(FMath::CeilToInt(Remaining)));
+	}
+
+	if (bStealthed)
+	{
+		return NSLOCTEXT("Narty", "Ability_Hidden", "Q \u2014 \u0441\u043a\u0440\u044b\u0442");
+	}
+	if (bFortitude)
+	{
+		return NSLOCTEXT("Narty", "Ability_Iron", "Q \u2014 \u0441\u0442\u043e\u0439\u043a\u043e\u0441\u0442\u044c");
+	}
+
+	return Name;
+}
+
+void UNartyCombatComponent::NotifyAbilityHud()
+{
+	const FText Line = GetAbilityLine();
+	if (Line.EqualTo(LastAbilityLine))
+	{
+		return;
+	}
+	LastAbilityLine = Line;
+	OnAbilityChanged.Broadcast(Line);
+}
+
+void UNartyCombatComponent::ActivateSoslanDash()
+{
+	ACharacter* Character = Cast<ACharacter>(GetOwner());
+	if (!Character)
+	{
+		return;
+	}
+
+	bDashing = true;
+	DashHitActors.Reset();
+	if (UNartyHealthComponent* Health = Character->FindComponentByClass<UNartyHealthComponent>())
+	{
+		Health->GrantIFrames(0.4f);
+	}
+
+	const FVector Launch = Character->GetActorForwardVector() * 2200.f + FVector(0.f, 0.f, 160.f);
+	Character->LaunchCharacter(Launch, true, true);
+	PlayAttackAnimation();
+
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().SetTimer(
+			AbilityEndHandle,
+			this,
+			&UNartyCombatComponent::EndSoslanDash,
+			0.35f,
+			false);
+	}
+
+	UE_LOG(LogTemp, Warning, TEXT("Narty: Soslan dash"));
+}
+
+void UNartyCombatComponent::SweepDashHits()
+{
+	AActor* OwnerActor = GetOwner();
+	UWorld* World = GetWorld();
+	if (!OwnerActor || !World)
+	{
+		return;
+	}
+
+	const FVector Start = OwnerActor->GetActorLocation() + FVector(0.f, 0.f, 40.f);
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(NartyDash), false, OwnerActor);
+	TArray<FOverlapResult> Overlaps;
+	World->OverlapMultiByChannel(
+		Overlaps, Start, FQuat::Identity, ECC_Pawn,
+		FCollisionShape::MakeSphere(70.f), Params);
+
+	for (const FOverlapResult& Overlap : Overlaps)
+	{
+		AActor* HitActor = Overlap.GetActor();
+		if (!HitActor || DashHitActors.Contains(HitActor))
+		{
+			continue;
+		}
+		DashHitActors.Add(HitActor);
+		if (UNartyHealthComponent* HitHealth = HitActor->FindComponentByClass<UNartyHealthComponent>())
+		{
+			HitHealth->ApplyDamage(AttackDamage * 1.15f, OwnerActor);
+		}
+	}
+}
+
+void UNartyCombatComponent::EndSoslanDash()
+{
+	bDashing = false;
+	DashHitActors.Reset();
+	NotifyAbilityHud();
+}
+
+void UNartyCombatComponent::ActivateBatrazFortitude()
+{
+	AActor* OwnerActor = GetOwner();
+	if (!OwnerActor)
+	{
+		return;
+	}
+
+	bFortitude = true;
+	if (UNartyHealthComponent* Health = OwnerActor->FindComponentByClass<UNartyHealthComponent>())
+	{
+		Health->IncomingDamageScale = 0.4f;
+	}
+
+	PlayAttackAnimation();
+	DealStrikeDamage(AttackDamage * 2.1f, (bHasForgeWeapon ? AttackRange + 50.f : AttackRange + 20.f), AttackRadius * 1.7f);
+
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().SetTimer(
+			AbilityEndHandle,
+			this,
+			&UNartyCombatComponent::EndBatrazFortitude,
+			3.2f,
+			false);
+	}
+
+	UE_LOG(LogTemp, Warning, TEXT("Narty: Batraz fortitude"));
+}
+
+void UNartyCombatComponent::EndBatrazFortitude()
+{
+	bFortitude = false;
+	if (AActor* OwnerActor = GetOwner())
+	{
+		if (UNartyHealthComponent* Health = OwnerActor->FindComponentByClass<UNartyHealthComponent>())
+		{
+			Health->IncomingDamageScale = 1.f;
+		}
+	}
+	NotifyAbilityHud();
+}
+
+void UNartyCombatComponent::ActivateSyrdonStealth()
+{
+	ACharacter* Character = Cast<ACharacter>(GetOwner());
+	if (!Character)
+	{
+		return;
+	}
+
+	bStealthed = true;
+
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().SetTimer(
+			AbilityEndHandle,
+			this,
+			&UNartyCombatComponent::EndSyrdonStealth,
+			4.5f,
+			false);
+	}
+
+	UE_LOG(LogTemp, Warning, TEXT("Narty: Syrdon stealth"));
+}
+
+void UNartyCombatComponent::EndSyrdonStealth()
+{
+	bStealthed = false;
+	NotifyAbilityHud();
 }

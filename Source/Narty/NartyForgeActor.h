@@ -20,6 +20,8 @@ class NARTY_API ANartyForgeActor : public AActor, public INartyInteractable
 public:
 	ANartyForgeActor();
 
+	void MarkWeaponGranted();
+
 	virtual bool CanNartyInteract() const override;
 	virtual void TryNartyInteract(ACharacter* Character) override;
 

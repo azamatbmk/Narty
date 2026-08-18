@@ -22,6 +22,7 @@ public:
 	ANartyUatsamongaCup();
 
 	void ActivateForQuest();
+	void RestoreFromSave(bool bActive, bool bJudged, bool bToldTruth);
 	void PlayBoil(bool bBoil);
 	bool HasJudged() const { return bJudged; }
 

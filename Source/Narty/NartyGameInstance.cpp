@@ -4,6 +4,9 @@
 #include "NartyObjectiveWidget.h"
 #include "NartyEndingWidget.h"
 #include "NartyHealthWidget.h"
+#include "NartyPauseMenuWidget.h"
+#include "NartySaveGame.h"
+#include "NartyPauseComponent.h"
 #include "NartyGorgeLayout.h"
 #include "NartyHealthComponent.h"
 #include "NartyMountainFireActor.h"
@@ -11,6 +14,7 @@
 #include "NartyUatsamongaCup.h"
 #include "NartyHeroTrialSite.h"
 #include "NartyFinaleSite.h"
+#include "NartyForgeActor.h"
 #include "NartyCombatComponent.h"
 #include "NartyInteractComponent.h"
 #include "GameFramework/Character.h"
@@ -21,6 +25,10 @@
 #include "TimerManager.h"
 #include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"
+#include "Kismet/KismetSystemLibrary.h"
+
+const FString UNartyGameInstance::SaveSlotName = TEXT("NartyCampaign");
+const int32 UNartyGameInstance::SaveUserIndex = 0;
 
 void UNartyGameInstance::OnStart()
 {
@@ -80,8 +88,12 @@ void UNartyGameInstance::ResetCampaignState()
 	}
 	HealthWidget = nullptr;
 	bPlayerHealthBound = false;
+	bPlayerAbilityBound = false;
 
 	HideEndingScreen();
+	HidePauseMenu();
+	PauseMenuWidget = nullptr;
+	bPauseMenuDelegatesBound = false;
 
 	if (UWorld* World = GetWorld())
 	{
@@ -90,7 +102,18 @@ void UNartyGameInstance::ResetCampaignState()
 		World->GetTimerManager().ClearTimer(ApplyHeroRetryHandle);
 		World->GetTimerManager().ClearTimer(RespawnHandle);
 		World->GetTimerManager().ClearTimer(FallCatchHandle);
+		World->GetTimerManager().ClearTimer(PauseStatusClearHandle);
 	}
+
+	bPauseMenuOpen = false;
+	bPendingForgeWeapon = false;
+	PendingLoadHealth = -1.f;
+	bApplyPendingLoadHealth = false;
+	bPendingPlayerTransform = false;
+	PendingFireGuardiansAlive = -1;
+	PendingTrialState = FNartyTrialSaveState();
+	PendingPlayerLocation = FVector::ZeroVector;
+	PendingPlayerRotation = FRotator::ZeroRotator;
 }
 
 void UNartyGameInstance::BootstrapGorge()
@@ -253,7 +276,13 @@ void UNartyGameInstance::ShowHeroSelectMenu()
 		if (HeroSelectWidget)
 		{
 			HeroSelectWidget->OnHeroChosen.AddDynamic(this, &UNartyGameInstance::HandleHeroChosen);
+			HeroSelectWidget->OnContinueRequested.AddDynamic(this, &UNartyGameInstance::HandleContinueCampaign);
 		}
+	}
+
+	if (IsValid(HeroSelectWidget))
+	{
+		HeroSelectWidget->SetContinueVisible(HasSaveGame());
 	}
 
 	if (IsValid(HeroSelectWidget) && !HeroSelectWidget->IsInViewport())
@@ -308,6 +337,34 @@ void UNartyGameInstance::HandleHeroChosen(ENartyHero Hero)
 	HideHeroSelectMenu();
 	EnsurePlayerReady();
 	ApplySelectedHeroToLocalPawn();
+}
+
+void UNartyGameInstance::HandleContinueCampaign()
+{
+	if (!LoadCampaign())
+	{
+		DeleteSaveGame();
+		if (IsValid(HeroSelectWidget))
+		{
+			HeroSelectWidget->SetContinueVisible(false);
+		}
+		UE_LOG(LogTemp, Warning, TEXT("Narty: continue failed — save removed"));
+		return;
+	}
+
+	HideHeroSelectMenu();
+	EnsurePlayerReady();
+	ApplySelectedHeroToLocalPawn();
+	SyncWorldToLoadedState();
+	ApplyPendingPlayerTransform();
+
+	if (QuestStage == ENartyQuestStage::Completed)
+	{
+		ShowEndingScreen(ChosenEnding);
+	}
+
+	UE_LOG(LogTemp, Warning, TEXT("Narty: campaign loaded hero=%d stage=%d"),
+		static_cast<int32>(SelectedHero), static_cast<int32>(QuestStage));
 }
 
 void UNartyGameInstance::ApplySelectedHeroToLocalPawn()
@@ -400,6 +457,13 @@ void UNartyGameInstance::ApplyHeroToCharacter(ACharacter* HeroCharacter, ENartyH
 	}
 	Combat->SetHero(Hero);
 
+	if (!bPlayerAbilityBound)
+	{
+		Combat->OnAbilityChanged.AddDynamic(this, &UNartyGameInstance::HandleAbilityChanged);
+		bPlayerAbilityBound = true;
+	}
+	Combat->NotifyAbilityHud();
+
 	UNartyHealthComponent* Health = HeroCharacter->FindComponentByClass<UNartyHealthComponent>();
 	const bool bCreatedHealth = (Health == nullptr);
 	if (!Health)
@@ -411,6 +475,13 @@ void UNartyGameInstance::ApplyHeroToCharacter(ACharacter* HeroCharacter, ENartyH
 	Health->HitInvulnSeconds = 0.4f;
 	Health->SetMaxHealth(Stats.MaxHealth, bCreatedHealth);
 
+	if (bApplyPendingLoadHealth)
+	{
+		Health->SetHealth(PendingLoadHealth);
+		bApplyPendingLoadHealth = false;
+		PendingLoadHealth = -1.f;
+	}
+
 	if (!bPlayerHealthBound)
 	{
 		Health->OnDied.AddDynamic(this, &UNartyGameInstance::HandlePlayerDied);
@@ -419,6 +490,16 @@ void UNartyGameInstance::ApplyHeroToCharacter(ACharacter* HeroCharacter, ENartyH
 	}
 
 	UNartyInteractComponent::EnsureOn(HeroCharacter);
+	UNartyPauseComponent::EnsureOn(HeroCharacter);
+
+	if (bPendingForgeWeapon)
+	{
+		if (UNartyCombatComponent* CombatComp = HeroCharacter->FindComponentByClass<UNartyCombatComponent>())
+		{
+			CombatComp->GrantForgeWeapon();
+		}
+		bPendingForgeWeapon = false;
+	}
 
 	UE_LOG(LogTemp, Warning, TEXT("Narty: hero applied -> %s (speed=%.0f hp=%.0f)"),
 		*Stats.DisplayName.ToString(), Stats.MaxWalkSpeed, Stats.MaxHealth);
@@ -454,6 +535,15 @@ void UNartyGameInstance::EnsureHealthWidget()
 	}
 }
 
+void UNartyGameInstance::HandleAbilityChanged(FText AbilityLine)
+{
+	EnsureHealthWidget();
+	if (HealthWidget)
+	{
+		HealthWidget->SetAbilityLine(AbilityLine);
+	}
+}
+
 void UNartyGameInstance::HandlePlayerHealthChanged(float Health, float MaxHealth)
 {
 	EnsureHealthWidget();
@@ -468,6 +558,11 @@ void UNartyGameInstance::HandlePlayerDied(AActor* DeadActor, AActor* /*Killer*/)
 	if (QuestStage == ENartyQuestStage::Completed)
 	{
 		return;
+	}
+
+	if (bPauseMenuOpen)
+	{
+		HidePauseMenu();
 	}
 
 	UWorld* World = GetWorld();
@@ -724,6 +819,7 @@ void UNartyGameInstance::StartFireQuest()
 
 	UpdateObjectiveUI();
 	UE_LOG(LogTemp, Warning, TEXT("Narty: fire quest started"));
+	TryAutoSaveCampaign();
 }
 
 void UNartyGameInstance::NotifyFireTaken()
@@ -738,6 +834,7 @@ void UNartyGameInstance::NotifyFireTaken()
 
 	UpdateObjectiveUI();
 	UE_LOG(LogTemp, Warning, TEXT("Narty: fire taken — return to hearth"));
+	TryAutoSaveCampaign();
 }
 
 void UNartyGameInstance::NotifyFireReturned()
@@ -756,6 +853,7 @@ void UNartyGameInstance::NotifyFireReturned()
 
 	StartUatsamongaQuest();
 	UE_LOG(LogTemp, Warning, TEXT("Narty: fire returned — starting Uatsamonga"));
+	TryAutoSaveCampaign();
 }
 
 void UNartyGameInstance::StartUatsamongaQuest()
@@ -768,6 +866,7 @@ void UNartyGameInstance::StartUatsamongaQuest()
 	}
 
 	UpdateObjectiveUI();
+	TryAutoSaveCampaign();
 }
 
 void UNartyGameInstance::NotifyUatsamongaResolved(bool bToldTruth)
@@ -776,6 +875,7 @@ void UNartyGameInstance::NotifyUatsamongaResolved(bool bToldTruth)
 	bClanFeudStarted = true;
 	StartHeroTrial();
 	UE_LOG(LogTemp, Warning, TEXT("Narty: Uatsamonga done, truth=%d — hero trial starts"), bToldTruth ? 1 : 0);
+	TryAutoSaveCampaign();
 }
 
 void UNartyGameInstance::StartHeroTrial()
@@ -788,6 +888,7 @@ void UNartyGameInstance::StartHeroTrial()
 	}
 
 	UpdateObjectiveUI();
+	TryAutoSaveCampaign();
 }
 
 void UNartyGameInstance::NotifyHeroTrialCompleted(bool bNoblePath)
@@ -795,6 +896,7 @@ void UNartyGameInstance::NotifyHeroTrialCompleted(bool bNoblePath)
 	bNobleTrialPath = bNoblePath;
 	StartFinale();
 	UE_LOG(LogTemp, Warning, TEXT("Narty: hero trial done noble=%d — finale"), bNoblePath ? 1 : 0);
+	TryAutoSaveCampaign();
 }
 
 void UNartyGameInstance::StartFinale()
@@ -807,6 +909,7 @@ void UNartyGameInstance::StartFinale()
 	}
 
 	UpdateObjectiveUI();
+	TryAutoSaveCampaign();
 }
 
 void UNartyGameInstance::NotifyFinaleCompleted(ENartyEnding Ending)
@@ -816,6 +919,7 @@ void UNartyGameInstance::NotifyFinaleCompleted(ENartyEnding Ending)
 	UpdateObjectiveUI();
 	ShowEndingScreen(Ending);
 	UE_LOG(LogTemp, Warning, TEXT("Narty: finale completed ending=%d"), static_cast<int32>(Ending));
+	TryAutoSaveCampaign();
 }
 
 void UNartyGameInstance::ShowEndingScreen(ENartyEnding Ending)
@@ -887,8 +991,494 @@ void UNartyGameInstance::HideEndingScreen()
 	}
 }
 
+bool UNartyGameInstance::HasSaveGame() const
+{
+	return UGameplayStatics::DoesSaveGameExist(SaveSlotName, SaveUserIndex);
+}
+
+bool UNartyGameInstance::PopulateSaveGame(UNartySaveGame* Save) const
+{
+	if (!Save || !HasSelectedHero())
+	{
+		return false;
+	}
+
+	Save->SaveVersion = UNartySaveGame::CurrentVersion;
+	Save->SelectedHero = SelectedHero;
+	Save->QuestStage = QuestStage;
+	Save->bHasMountainFire = bHasMountainFire;
+	Save->bToldTruthAtCup = bToldTruthAtCup;
+	Save->bClanFeudStarted = bClanFeudStarted;
+	Save->bNobleTrialPath = bNobleTrialPath;
+	Save->bHasForgeWeapon = false;
+	Save->ChosenEnding = ChosenEnding;
+	Save->PlayerHealth = 0.f;
+	Save->bHasPlayerTransform = false;
+	Save->FireGuardiansAlive = -1;
+	Save->TrialState = FNartyTrialSaveState();
+
+	if (UWorld* World = GetWorld())
+	{
+		if (APlayerController* PC = World->GetFirstPlayerController())
+		{
+			if (APawn* Pawn = PC->GetPawn())
+			{
+				if (const UNartyCombatComponent* Combat = Pawn->FindComponentByClass<UNartyCombatComponent>())
+				{
+					Save->bHasForgeWeapon = Combat->HasForgeWeapon();
+				}
+
+				if (const UNartyHealthComponent* Health = Pawn->FindComponentByClass<UNartyHealthComponent>())
+				{
+					Save->PlayerHealth = Health->GetHealth();
+				}
+
+				Save->bHasPlayerTransform = true;
+				Save->PlayerLocation = Pawn->GetActorLocation();
+				Save->PlayerRotation = Pawn->GetActorRotation();
+			}
+		}
+
+		if (ANartyMountainFireActor* Fire = NartyGorgeLayout::GetMountainFire(World))
+		{
+			Save->FireGuardiansAlive = Fire->CaptureGuardiansAlive();
+		}
+
+		if (QuestStage >= ENartyQuestStage::HeroTrial)
+		{
+			if (ANartyHeroTrialSite* Trial = NartyGorgeLayout::GetHeroTrialSite(World))
+			{
+				Trial->CaptureSaveState(Save->TrialState);
+			}
+		}
+	}
+
+	return true;
+}
+
+bool UNartyGameInstance::ApplySaveGame(const UNartySaveGame* Save)
+{
+	if (!Save)
+	{
+		return false;
+	}
+
+	if (Save->SaveVersion != 1 && Save->SaveVersion != UNartySaveGame::CurrentVersion)
+	{
+		return false;
+	}
+
+	if (Save->SelectedHero == ENartyHero::None || Save->QuestStage == ENartyQuestStage::None)
+	{
+		return false;
+	}
+
+	static const ENartyQuestStage ValidStages[] = {
+		ENartyQuestStage::GetWeapon,
+		ENartyQuestStage::FetchFire,
+		ENartyQuestStage::ReturnFire,
+		ENartyQuestStage::Uatsamonga,
+		ENartyQuestStage::HeroTrial,
+		ENartyQuestStage::Finale,
+		ENartyQuestStage::Completed
+	};
+	bool bValidStage = false;
+	for (ENartyQuestStage Stage : ValidStages)
+	{
+		if (Save->QuestStage == Stage)
+		{
+			bValidStage = true;
+			break;
+		}
+	}
+	if (!bValidStage)
+	{
+		return false;
+	}
+
+	SelectedHero = Save->SelectedHero;
+	QuestStage = Save->QuestStage;
+	bHasMountainFire = Save->bHasMountainFire;
+	bToldTruthAtCup = Save->bToldTruthAtCup;
+	bClanFeudStarted = Save->bClanFeudStarted;
+	bNobleTrialPath = Save->bNobleTrialPath;
+	ChosenEnding = Save->ChosenEnding;
+	bPendingForgeWeapon = Save->bHasForgeWeapon;
+	PendingLoadHealth = Save->PlayerHealth;
+	bApplyPendingLoadHealth = true;
+
+	if (Save->SaveVersion >= 2)
+	{
+		bPendingPlayerTransform = Save->bHasPlayerTransform;
+		PendingPlayerLocation = Save->PlayerLocation;
+		PendingPlayerRotation = Save->PlayerRotation;
+		PendingFireGuardiansAlive = Save->FireGuardiansAlive;
+		PendingTrialState = Save->TrialState;
+	}
+	else
+	{
+		bPendingPlayerTransform = false;
+		PendingFireGuardiansAlive = -1;
+		PendingTrialState = FNartyTrialSaveState();
+	}
+
+	return true;
+}
+
+bool UNartyGameInstance::SaveCampaign()
+{
+	if (!HasSelectedHero())
+	{
+		return false;
+	}
+
+	UNartySaveGame* Save = Cast<UNartySaveGame>(
+		UGameplayStatics::CreateSaveGameObject(UNartySaveGame::StaticClass()));
+	if (!Save || !PopulateSaveGame(Save))
+	{
+		return false;
+	}
+
+	const bool bSaved = UGameplayStatics::SaveGameToSlot(Save, SaveSlotName, SaveUserIndex);
+	UE_LOG(LogTemp, Warning, TEXT("Narty: campaign save %s"), bSaved ? TEXT("ok") : TEXT("failed"));
+	return bSaved;
+}
+
+bool UNartyGameInstance::LoadCampaign()
+{
+	if (!HasSaveGame())
+	{
+		return false;
+	}
+
+	USaveGame* Loaded = UGameplayStatics::LoadGameFromSlot(SaveSlotName, SaveUserIndex);
+	const UNartySaveGame* Save = Cast<UNartySaveGame>(Loaded);
+	if (!Save || !ApplySaveGame(Save))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Narty: corrupt or incompatible save — ignoring slot"));
+		return false;
+	}
+	return true;
+}
+
+void UNartyGameInstance::DeleteSaveGame()
+{
+	if (HasSaveGame())
+	{
+		UGameplayStatics::DeleteGameInSlot(SaveSlotName, SaveUserIndex);
+	}
+}
+
+void UNartyGameInstance::TryAutoSaveCampaign()
+{
+	if (!HasSelectedHero() || QuestStage == ENartyQuestStage::None || QuestStage == ENartyQuestStage::GetWeapon)
+	{
+		return;
+	}
+
+	SaveCampaign();
+}
+
+void UNartyGameInstance::ApplyPendingPlayerTransform()
+{
+	if (!bPendingPlayerTransform)
+	{
+		return;
+	}
+
+	bPendingPlayerTransform = false;
+
+	UWorld* World = GetWorld();
+	APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
+	APawn* Pawn = PC ? PC->GetPawn() : nullptr;
+	if (!Pawn)
+	{
+		return;
+	}
+
+	Pawn->SetActorLocation(PendingPlayerLocation, false, nullptr, ETeleportType::TeleportPhysics);
+	Pawn->SetActorRotation(PendingPlayerRotation, ETeleportType::TeleportPhysics);
+	PC->SetControlRotation(PendingPlayerRotation);
+}
+
+void UNartyGameInstance::SyncWorldToLoadedState()
+{
+	UWorld* World = GetWorld();
+	if (!World || !HasSelectedHero())
+	{
+		return;
+	}
+
+	bool bForgeDone = QuestStage != ENartyQuestStage::GetWeapon;
+	if (!bForgeDone)
+	{
+		if (APlayerController* PC = World->GetFirstPlayerController())
+		{
+			if (APawn* Pawn = PC->GetPawn())
+			{
+				if (const UNartyCombatComponent* Combat = Pawn->FindComponentByClass<UNartyCombatComponent>())
+				{
+					bForgeDone = Combat->HasForgeWeapon();
+				}
+			}
+		}
+	}
+
+	if (ANartyForgeActor* Forge = NartyGorgeLayout::GetForge(World))
+	{
+		if (bForgeDone)
+		{
+			Forge->MarkWeaponGranted();
+		}
+	}
+
+	if (ANartyMountainFireActor* Fire = NartyGorgeLayout::GetMountainFire(World))
+	{
+		const bool bTaken = QuestStage > ENartyQuestStage::FetchFire
+			|| (QuestStage == ENartyQuestStage::ReturnFire && bHasMountainFire);
+		const bool bActive = QuestStage == ENartyQuestStage::FetchFire
+			|| (QuestStage == ENartyQuestStage::ReturnFire && bHasMountainFire);
+		Fire->RestoreFromSave(bActive, bTaken, PendingFireGuardiansAlive);
+	}
+
+	if (ANartySettlementHearthActor* Hearth = NartyGorgeLayout::GetHearth(World))
+	{
+		const bool bReturn = QuestStage == ENartyQuestStage::ReturnFire && bHasMountainFire;
+		const bool bDone = QuestStage > ENartyQuestStage::ReturnFire;
+		Hearth->RestoreFromSave(bReturn, bDone);
+	}
+
+	if (ANartyUatsamongaCup* Cup = NartyGorgeLayout::GetUatsamongaCup(World))
+	{
+		const bool bActive = QuestStage == ENartyQuestStage::Uatsamonga;
+		const bool bJudged = QuestStage > ENartyQuestStage::Uatsamonga || bClanFeudStarted;
+		Cup->RestoreFromSave(bActive, bJudged, bToldTruthAtCup);
+	}
+
+	if (ANartyHeroTrialSite* Trial = NartyGorgeLayout::GetHeroTrialSite(World))
+	{
+		const bool bActive = QuestStage == ENartyQuestStage::HeroTrial;
+		const bool bDone = QuestStage > ENartyQuestStage::HeroTrial;
+		if (bActive || bDone)
+		{
+			Trial->RestoreFromSave(SelectedHero, bActive, bDone, PendingTrialState);
+		}
+	}
+
+	if (ANartyFinaleSite* Finale = NartyGorgeLayout::GetFinaleSite(World))
+	{
+		const bool bActive = QuestStage == ENartyQuestStage::Finale;
+		const bool bDone = QuestStage == ENartyQuestStage::Completed;
+		if (bActive || bDone)
+		{
+			Finale->RestoreFromSave(bActive, bDone);
+		}
+	}
+
+	UpdateObjectiveUI();
+}
+
+bool UNartyGameInstance::CanOpenPauseMenu() const
+{
+	if (!HasSelectedHero() || bPauseMenuOpen)
+	{
+		return false;
+	}
+
+	if (IsValid(HeroSelectWidget) && HeroSelectWidget->IsInViewport())
+	{
+		return false;
+	}
+
+	if (IsValid(EndingWidget) && EndingWidget->IsInViewport())
+	{
+		return false;
+	}
+
+	if (UWorld* World = GetWorld())
+	{
+		if (APlayerController* PC = World->GetFirstPlayerController())
+		{
+			if (APawn* Pawn = PC->GetPawn())
+			{
+				if (const UNartyHealthComponent* Health = Pawn->FindComponentByClass<UNartyHealthComponent>())
+				{
+					if (Health->IsDead())
+					{
+						return false;
+					}
+				}
+			}
+		}
+	}
+
+	return true;
+}
+
+void UNartyGameInstance::TogglePauseMenu()
+{
+	if (bPauseMenuOpen)
+	{
+		HidePauseMenu();
+	}
+	else if (CanOpenPauseMenu())
+	{
+		ShowPauseMenu();
+	}
+}
+
+void UNartyGameInstance::ShowPauseMenu()
+{
+	if (bPauseMenuOpen || !CanOpenPauseMenu())
+	{
+		return;
+	}
+
+	UWorld* World = GetWorld();
+	APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
+	if (!PC)
+	{
+		return;
+	}
+
+	if (!IsValid(PauseMenuWidget))
+	{
+		PauseMenuWidget = CreateWidget<UNartyPauseMenuWidget>(PC, UNartyPauseMenuWidget::StaticClass());
+		if (PauseMenuWidget && !bPauseMenuDelegatesBound)
+		{
+			PauseMenuWidget->OnResume.AddDynamic(this, &UNartyGameInstance::HandlePauseResume);
+			PauseMenuWidget->OnSave.AddDynamic(this, &UNartyGameInstance::HandlePauseSave);
+			PauseMenuWidget->OnNewGame.AddDynamic(this, &UNartyGameInstance::HandlePauseNewGame);
+			PauseMenuWidget->OnQuit.AddDynamic(this, &UNartyGameInstance::HandlePauseQuit);
+			bPauseMenuDelegatesBound = true;
+		}
+	}
+
+	if (!IsValid(PauseMenuWidget))
+	{
+		return;
+	}
+
+	PauseMenuWidget->SetStatusText(FText::GetEmpty());
+	if (!PauseMenuWidget->IsInViewport())
+	{
+		PauseMenuWidget->AddToViewport(1500);
+	}
+
+	bPauseMenuOpen = true;
+
+	if (World)
+	{
+		UGameplayStatics::SetGamePaused(World, true);
+	}
+
+	PC->bShowMouseCursor = true;
+	FInputModeUIOnly Mode;
+	Mode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+	Mode.SetWidgetToFocus(PauseMenuWidget->TakeWidget());
+	PC->SetInputMode(Mode);
+
+	if (APawn* Pawn = PC->GetPawn())
+	{
+		Pawn->DisableInput(PC);
+	}
+}
+
+void UNartyGameInstance::HidePauseMenu()
+{
+	if (IsValid(PauseMenuWidget))
+	{
+		PauseMenuWidget->RemoveFromParent();
+		PauseMenuWidget->SetStatusText(FText::GetEmpty());
+	}
+
+	bPauseMenuOpen = false;
+
+	if (UWorld* World = GetWorld())
+	{
+		UGameplayStatics::SetGamePaused(World, false);
+		World->GetTimerManager().ClearTimer(PauseStatusClearHandle);
+
+		if (APlayerController* PC = World->GetFirstPlayerController())
+		{
+			if (IsValid(EndingWidget) && EndingWidget->IsInViewport())
+			{
+				return;
+			}
+
+			if (IsValid(HeroSelectWidget) && HeroSelectWidget->IsInViewport())
+			{
+				return;
+			}
+
+			PC->bShowMouseCursor = false;
+			FInputModeGameOnly InputMode;
+			PC->SetInputMode(InputMode);
+
+			if (APawn* Pawn = PC->GetPawn())
+			{
+				Pawn->EnableInput(PC);
+			}
+		}
+	}
+}
+
+void UNartyGameInstance::HandlePauseResume()
+{
+	HidePauseMenu();
+}
+
+void UNartyGameInstance::HandlePauseSave()
+{
+	const bool bSaved = SaveCampaign();
+	if (IsValid(PauseMenuWidget))
+	{
+		PauseMenuWidget->SetStatusText(bSaved
+			? NSLOCTEXT("Narty", "Pause_Saved", "\u0421\u043e\u0445\u0440\u0430\u043d\u0435\u043d\u043e")
+			: NSLOCTEXT("Narty", "Pause_SaveFailed", "\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0441\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c"));
+
+		if (UWorld* World = GetWorld())
+		{
+			World->GetTimerManager().SetTimer(
+				PauseStatusClearHandle,
+				FTimerDelegate::CreateWeakLambda(PauseMenuWidget, [Widget = PauseMenuWidget]()
+				{
+					if (IsValid(Widget))
+					{
+						Widget->SetStatusText(FText::GetEmpty());
+					}
+				}),
+				2.f,
+				false,
+				-1.f,
+				false);
+		}
+	}
+}
+
+void UNartyGameInstance::HandlePauseNewGame()
+{
+	HidePauseMenu();
+	DeleteSaveGame();
+	RestartCampaign();
+}
+
+void UNartyGameInstance::HandlePauseQuit()
+{
+	HidePauseMenu();
+
+	if (UWorld* World = GetWorld())
+	{
+		if (APlayerController* PC = World->GetFirstPlayerController())
+		{
+			UKismetSystemLibrary::QuitGame(World, PC, EQuitPreference::Quit, false);
+		}
+	}
+}
+
 void UNartyGameInstance::HandlePlayAgain()
 {
+	DeleteSaveGame();
 	RestartCampaign();
 }
 
@@ -896,6 +1486,9 @@ void UNartyGameInstance::RestartCampaign()
 {
 	// Always restore input first — OpenLevel may fail or World may be missing.
 	HideEndingScreen();
+	HidePauseMenu();
+	PauseMenuWidget = nullptr;
+	bPauseMenuDelegatesBound = false;
 	ResetCampaignState();
 
 	UWorld* World = GetWorld();

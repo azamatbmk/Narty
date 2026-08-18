@@ -10,6 +10,7 @@ class UTextBlock;
 class UVerticalBox;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnNartyHeroChosen, ENartyHero, Hero);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnNartyContinueRequested);
 
 UCLASS()
 class NARTY_API UNartyHeroSelectWidget : public UUserWidget
@@ -19,6 +20,11 @@ class NARTY_API UNartyHeroSelectWidget : public UUserWidget
 public:
 	UPROPERTY(BlueprintAssignable, Category = "Narty|Hero")
 	FOnNartyHeroChosen OnHeroChosen;
+
+	UPROPERTY(BlueprintAssignable, Category = "Narty|Hero")
+	FOnNartyContinueRequested OnContinueRequested;
+
+	void SetContinueVisible(bool bVisible);
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
@@ -37,7 +43,13 @@ private:
 	UFUNCTION()
 	void HandleSyrdonClicked();
 
+	UFUNCTION()
+	void HandleContinueClicked();
+
 	void ChooseHero(ENartyHero Hero);
+
+	UPROPERTY()
+	TObjectPtr<UButton> ContinueButton;
 
 	UPROPERTY()
 	TObjectPtr<UButton> SoslanButton;

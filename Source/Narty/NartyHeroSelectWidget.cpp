@@ -24,6 +24,10 @@ void UNartyHeroSelectWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
 
+	if (ContinueButton)
+	{
+		ContinueButton->OnClicked.AddDynamic(this, &UNartyHeroSelectWidget::HandleContinueClicked);
+	}
 	if (SoslanButton)
 	{
 		SoslanButton->OnClicked.AddDynamic(this, &UNartyHeroSelectWidget::HandleSoslanClicked);
@@ -85,6 +89,12 @@ void UNartyHeroSelectWidget::BuildLayout()
 		SubSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 20.f));
 	}
 
+	ContinueButton = AddHeroButton(
+		Root,
+		NSLOCTEXT("Narty", "Btn_Continue", "\u041f\u0440\u043e\u0434\u043e\u043b\u0436\u0438\u0442\u044c \u043a\u0430\u043c\u043f\u0430\u043d\u0438\u044e"),
+		ENartyHero::None);
+	ContinueButton->SetVisibility(ESlateVisibility::Collapsed);
+
 	SoslanButton = AddHeroButton(
 		Root,
 		NSLOCTEXT("Narty", "Btn_Soslan", "\u0421\u043e\u0441\u043b\u0430\u043d \u2014 \u0441\u043e\u043b\u043d\u0446\u0435 \u0438 \u0441\u043a\u043e\u0440\u043e\u0441\u0442\u044c"),
@@ -124,6 +134,19 @@ UButton* UNartyHeroSelectWidget::AddHeroButton(UVerticalBox* Root, const FText& 
 	}
 
 	return Button;
+}
+
+void UNartyHeroSelectWidget::SetContinueVisible(bool bVisible)
+{
+	if (ContinueButton)
+	{
+		ContinueButton->SetVisibility(bVisible ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+	}
+}
+
+void UNartyHeroSelectWidget::HandleContinueClicked()
+{
+	OnContinueRequested.Broadcast();
 }
 
 void UNartyHeroSelectWidget::HandleSoslanClicked()

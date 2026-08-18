@@ -27,7 +27,10 @@ public:
 	float GetHealth() const;
 
 	UFUNCTION(BlueprintCallable, Category = "Narty|Combat")
-	void SetMaxHealth(float InMaxHealth);
+	void SetMaxHealth(float InMaxHealth, bool bFill = true);
+
+	UFUNCTION(BlueprintCallable, Category = "Narty|Combat")
+	void SetHealth(float InHealth);
 
 	/** Fired once when health reaches zero. */
 	UPROPERTY(BlueprintAssignable, Category = "Narty|Combat")

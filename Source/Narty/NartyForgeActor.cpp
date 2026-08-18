@@ -122,6 +122,18 @@ bool ANartyForgeActor::CanNartyInteract() const
 	return InsideCharacter.IsValid() && !bDialogOpen;
 }
 
+void ANartyForgeActor::MarkWeaponGranted()
+{
+	if (bWeaponGranted)
+	{
+		return;
+	}
+
+	bWeaponGranted = true;
+	Label->SetText(NSLOCTEXT("Narty", "Forge_LabelDone", "\u041a\u0443\u0440\u0434\u0430\u043b\u0430\u0433\u043e\u043d \u2713"));
+	ForgeLight->SetLightColor(FLinearColor(0.3f, 0.85f, 1.f));
+}
+
 void ANartyForgeActor::TryNartyInteract(ACharacter* Character)
 {
 	if (!Character || bDialogOpen)

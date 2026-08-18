@@ -1,6 +1,7 @@
 #include "NartyUaigEnemy.h"
 
 #include "NartyHealthComponent.h"
+#include "NartyCombatComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/TextRenderComponent.h"
 #include "GameFramework/Pawn.h"
@@ -83,6 +84,14 @@ void ANartyUaigEnemy::Tick(float DeltaSeconds)
 	if (Distance > AggroRange || Distance < 1.f)
 	{
 		return;
+	}
+
+	if (const UNartyCombatComponent* Combat = Player->FindComponentByClass<UNartyCombatComponent>())
+	{
+		if (Combat->IsStealthed() && Distance > 110.f)
+		{
+			return;
+		}
 	}
 
 	const FRotator Face = ToPlayer.Rotation();

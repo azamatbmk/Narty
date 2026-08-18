@@ -23,6 +23,8 @@ public:
 	ANartyMountainFireActor();
 
 	void ActivateForQuest();
+	int32 CaptureGuardiansAlive() const;
+	void RestoreFromSave(bool bActive, bool bTaken, int32 GuardiansAlive);
 
 	virtual bool CanNartyInteract() const override;
 	virtual void TryNartyInteract(ACharacter* Character) override;
@@ -58,6 +60,7 @@ protected:
 	bool AreGuardiansDefeated() const;
 	void OpenBargainDialog(ACharacter* Character);
 	void RetryTakeForOverlappingPlayers();
+	void EnsureGuardiansSpawned();
 
 	UFUNCTION()
 	void OnGuardianDefeated(AActor* DestroyedActor);

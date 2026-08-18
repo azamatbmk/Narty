@@ -24,6 +24,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Narty|Health")
 	void SetMaxHealth(float InMaxHealth, bool bFill = true);
 
+	UFUNCTION(BlueprintCallable, Category = "Narty|Health")
+	void SetHealth(float InHealth);
+
 	UFUNCTION(BlueprintPure, Category = "Narty|Health")
 	float GetHealth() const { return Health; }
 
@@ -35,6 +38,12 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Narty|Health")
 	bool IsInvulnerable() const;
+
+	UFUNCTION(BlueprintCallable, Category = "Narty|Health")
+	void GrantIFrames(float Seconds);
+
+	UPROPERTY(EditAnywhere, Category = "Narty|Health")
+	float IncomingDamageScale = 1.f;
 
 	UPROPERTY(BlueprintAssignable, Category = "Narty|Health")
 	FOnNartyHealthChanged OnHealthChanged;

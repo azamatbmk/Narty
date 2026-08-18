@@ -4,12 +4,15 @@
 #include "Engine/GameInstance.h"
 #include "NartyHeroTypes.h"
 #include "NartyQuestTypes.h"
+#include "NartyCampaignSaveTypes.h"
 #include "NartyGameInstance.generated.h"
 
 class UNartyHeroSelectWidget;
 class UNartyObjectiveWidget;
 class UNartyEndingWidget;
 class UNartyHealthWidget;
+class UNartyPauseMenuWidget;
+class UNartySaveGame;
 class APlayerController;
 class ACharacter;
 class UNartyCombatComponent;
@@ -87,12 +90,45 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Narty|Quest")
 	void RestartCampaign();
 
+	UFUNCTION(BlueprintCallable, Category = "Narty|Save")
+	bool HasSaveGame() const;
+
+	UFUNCTION(BlueprintCallable, Category = "Narty|Save")
+	bool SaveCampaign();
+
+	UFUNCTION(BlueprintCallable, Category = "Narty|Save")
+	bool LoadCampaign();
+
+	UFUNCTION(BlueprintCallable, Category = "Narty|Save")
+	void DeleteSaveGame();
+
+	UFUNCTION(BlueprintCallable, Category = "Narty|Pause")
+	void TogglePauseMenu();
+
+	UFUNCTION(BlueprintPure, Category = "Narty|Pause")
+	bool IsPauseMenuOpen() const { return bPauseMenuOpen; }
+
 protected:
 	UFUNCTION()
 	void HandleHeroChosen(ENartyHero Hero);
 
 	UFUNCTION()
 	void HandlePlayAgain();
+
+	UFUNCTION()
+	void HandleContinueCampaign();
+
+	UFUNCTION()
+	void HandlePauseResume();
+
+	UFUNCTION()
+	void HandlePauseSave();
+
+	UFUNCTION()
+	void HandlePauseNewGame();
+
+	UFUNCTION()
+	void HandlePauseQuit();
 
 	void ShowHeroSelectMenu();
 	void HideHeroSelectMenu();
@@ -110,12 +146,23 @@ protected:
 	void RespawnPlayerAtNykhas();
 	void StartFallCatch();
 	void CheckFallenOutOfWorld();
+	void SyncWorldToLoadedState();
+	void TryAutoSaveCampaign();
+	void ApplyPendingPlayerTransform();
+	bool CanOpenPauseMenu() const;
+	void ShowPauseMenu();
+	void HidePauseMenu();
+	bool PopulateSaveGame(UNartySaveGame* Save) const;
+	bool ApplySaveGame(const UNartySaveGame* Save);
 
 	UFUNCTION()
 	void HandlePlayerDied(AActor* DeadActor, AActor* Killer);
 
 	UFUNCTION()
 	void HandlePlayerHealthChanged(float Health, float MaxHealth);
+
+	UFUNCTION()
+	void HandleAbilityChanged(FText AbilityLine);
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Narty|Hero")
 	ENartyHero SelectedHero = ENartyHero::None;
@@ -150,12 +197,30 @@ protected:
 	UPROPERTY()
 	TObjectPtr<UNartyHealthWidget> HealthWidget;
 
+	UPROPERTY()
+	TObjectPtr<UNartyPauseMenuWidget> PauseMenuWidget;
+
 	FTimerHandle HeroSelectRetryHandle;
 	FTimerHandle PlayerReadyRetryHandle;
 	FTimerHandle ApplyHeroRetryHandle;
 	FTimerHandle RespawnHandle;
 	FTimerHandle FallCatchHandle;
+	FTimerHandle PauseStatusClearHandle;
 
 	bool bRestartPending = false;
+	bool bPauseMenuOpen = false;
 	bool bPlayerHealthBound = false;
+	bool bPlayerAbilityBound = false;
+	bool bPendingForgeWeapon = false;
+	float PendingLoadHealth = -1.f;
+	bool bApplyPendingLoadHealth = false;
+	bool bPendingPlayerTransform = false;
+	bool bPauseMenuDelegatesBound = false;
+	FVector PendingPlayerLocation = FVector::ZeroVector;
+	FRotator PendingPlayerRotation = FRotator::ZeroRotator;
+	int32 PendingFireGuardiansAlive = -1;
+	FNartyTrialSaveState PendingTrialState;
+
+	static const FString SaveSlotName;
+	static const int32 SaveUserIndex;
 };

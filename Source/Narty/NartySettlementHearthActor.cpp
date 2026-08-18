@@ -78,6 +78,18 @@ void ANartySettlementHearthActor::CompleteWithFire()
 	HearthLight->SetAttenuationRadius(2200.f);
 }
 
+void ANartySettlementHearthActor::RestoreFromSave(bool bReturnActive, bool bCompleted)
+{
+	if (bCompleted)
+	{
+		CompleteWithFire();
+	}
+	else if (bReturnActive)
+	{
+		ActivateReturnObjective();
+	}
+}
+
 void ANartySettlementHearthActor::OnHearthOverlap(
 	UPrimitiveComponent* OverlappedComponent,
 	AActor* OtherActor,

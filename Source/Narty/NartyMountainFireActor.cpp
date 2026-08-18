@@ -84,6 +84,12 @@ void ANartyMountainFireActor::ActivateForQuest()
 	SetActorEnableCollision(true);
 	FlameLight->SetVisibility(true);
 
+	EnsureGuardiansSpawned();
+	UE_LOG(LogTemp, Warning, TEXT("Narty: mountain fire activated"));
+}
+
+void ANartyMountainFireActor::EnsureGuardiansSpawned()
+{
 	UWorld* World = GetWorld();
 	if (!World || Guardians.Num() > 0)
 	{
@@ -110,8 +116,94 @@ void ANartyMountainFireActor::ActivateForQuest()
 		Guardians.Add(G2);
 		G2->OnDefeated.AddDynamic(this, &ANartyMountainFireActor::OnGuardianDefeated);
 	}
+}
 
-	UE_LOG(LogTemp, Warning, TEXT("Narty: mountain fire activated"));
+int32 ANartyMountainFireActor::CaptureGuardiansAlive() const
+{
+	if (!bQuestActive || bFireTaken || Guardians.Num() == 0)
+	{
+		return -1;
+	}
+
+	int32 Alive = 0;
+	for (const TObjectPtr<ANartyTrainingDummy>& Dummy : Guardians)
+	{
+		if (IsValid(Dummy) && Dummy->GetHealth() > 0.f)
+		{
+			++Alive;
+		}
+	}
+	return Alive;
+}
+
+void ANartyMountainFireActor::RestoreFromSave(bool bActive, bool bTaken, int32 GuardiansAlive)
+{
+	if (bActive && !bTaken)
+	{
+		bQuestActive = true;
+		SetActorHiddenInGame(false);
+		SetActorEnableCollision(true);
+		if (FlameLight)
+		{
+			FlameLight->SetVisibility(true);
+		}
+
+		if (GuardiansAlive < 0)
+		{
+			EnsureGuardiansSpawned();
+		}
+		else if (GuardiansAlive == 0)
+		{
+			Label->SetText(NSLOCTEXT("Narty", "Fire_Ready", "\u041e\u0433\u043e\u043d\u044c \u0433\u043e\u0440\u044b"));
+		}
+		else
+		{
+			EnsureGuardiansSpawned();
+			int32 AliveLeft = GuardiansAlive;
+			for (int32 Index = Guardians.Num() - 1; Index >= 0; --Index)
+			{
+				ANartyTrainingDummy* Dummy = Guardians[Index].Get();
+				if (!IsValid(Dummy))
+				{
+					continue;
+				}
+
+				if (AliveLeft > 0)
+				{
+					--AliveLeft;
+				}
+				else
+				{
+					Dummy->ReceiveStrike(99999.f, this);
+				}
+			}
+		}
+	}
+	else if (bActive)
+	{
+		bQuestActive = true;
+		SetActorHiddenInGame(false);
+		SetActorEnableCollision(true);
+		if (FlameLight)
+		{
+			FlameLight->SetVisibility(true);
+		}
+	}
+
+	if (bTaken)
+	{
+		bFireTaken = true;
+		if (FlameMesh)
+		{
+			FlameMesh->SetVisibility(false);
+		}
+		if (FlameLight)
+		{
+			FlameLight->SetIntensity(1500.f);
+			FlameLight->SetLightColor(FLinearColor(0.4f, 0.45f, 0.5f));
+		}
+		Label->SetText(NSLOCTEXT("Narty", "Fire_Taken", "\u041e\u0433\u043e\u043d\u044c \u0432\u0437\u044f\u0442"));
+	}
 }
 
 void ANartyMountainFireActor::OnGuardianDefeated(AActor* /*DestroyedActor*/)

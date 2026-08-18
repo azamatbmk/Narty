@@ -103,6 +103,21 @@ void ANartyUatsamongaCup::ActivateForQuest()
 	UE_LOG(LogTemp, Warning, TEXT("Narty: Uatsamonga cup activated"));
 }
 
+void ANartyUatsamongaCup::RestoreFromSave(bool bActive, bool bJudgedState, bool bToldTruth)
+{
+	if (bActive)
+	{
+		ActivateForQuest();
+	}
+
+	if (bJudgedState)
+	{
+		bJudged = true;
+		bQuestActive = false;
+		PlayBoil(bToldTruth);
+	}
+}
+
 void ANartyUatsamongaCup::PlayBoil(bool bBoil)
 {
 	bBoiling = bBoil;

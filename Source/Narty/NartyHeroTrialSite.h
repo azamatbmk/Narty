@@ -4,6 +4,7 @@
 #include "GameFramework/Actor.h"
 #include "NartyHeroTypes.h"
 #include "NartyInteractable.h"
+#include "NartyCampaignSaveTypes.h"
 #include "NartyHeroTrialSite.generated.h"
 
 class UStaticMeshComponent;
@@ -25,6 +26,8 @@ public:
 	ANartyHeroTrialSite();
 
 	void ActivateForHero(ENartyHero Hero);
+	void CaptureSaveState(FNartyTrialSaveState& OutState) const;
+	void RestoreFromSave(ENartyHero Hero, bool bActive, bool bCompleted, const FNartyTrialSaveState& State);
 	FVector GetGateWorldLocation() const;
 
 	virtual bool CanNartyInteract() const override;
@@ -80,6 +83,10 @@ protected:
 	void CloseAnyDialog();
 	void CompleteTrial(bool bNoblePath);
 	void CheckBatrazCleared();
+	void ClearTrialDummies();
+	void ApplyTrialProgress(const FNartyTrialSaveState& State);
+	void DisableVisionTrigger(int32 VisionIndex);
+	void ApplyDummyHealthFromSave(const TArray<float>& HealthValues);
 	UStaticMeshComponent* AddBlock(const FName& Name, const FVector& RelLoc, const FVector& Scale, const FLinearColor& Color);
 	UBoxComponent* AddTrigger(const FName& Name, const FVector& RelLoc, const FVector& Extent, int32 VisionIndex);
 

@@ -17,6 +17,14 @@ void UNartyHealthComponent::BeginPlay()
 	bDead = false;
 }
 
+void UNartyHealthComponent::GrantIFrames(float Seconds)
+{
+	if (UWorld* World = GetWorld())
+	{
+		InvulnerableUntil = World->GetTimeSeconds() + FMath::Max(0.f, Seconds);
+	}
+}
+
 bool UNartyHealthComponent::IsInvulnerable() const
 {
 	const UWorld* World = GetWorld();
@@ -38,10 +46,18 @@ void UNartyHealthComponent::SetMaxHealth(float InMaxHealth, bool bFill)
 	OnHealthChanged.Broadcast(Health, MaxHealth);
 }
 
+void UNartyHealthComponent::SetHealth(float InHealth)
+{
+	Health = FMath::Clamp(InHealth, 0.f, MaxHealth);
+	bDead = Health <= 0.f;
+	OnHealthChanged.Broadcast(Health, MaxHealth);
+}
+
 void UNartyHealthComponent::ResetToFull(float InvulnerableSeconds)
 {
 	bDead = false;
 	Health = MaxHealth;
+	IncomingDamageScale = 1.f;
 	if (const UWorld* World = GetWorld())
 	{
 		InvulnerableUntil = World->GetTimeSeconds() + FMath::Max(0.f, InvulnerableSeconds);
@@ -52,6 +68,12 @@ void UNartyHealthComponent::ResetToFull(float InvulnerableSeconds)
 float UNartyHealthComponent::ApplyDamage(float Damage, AActor* InstigatorActor)
 {
 	if (bDead || Damage <= 0.f || IsInvulnerable())
+	{
+		return 0.f;
+	}
+
+	Damage *= FMath::Max(0.f, IncomingDamageScale);
+	if (Damage <= 0.f)
 	{
 		return 0.f;
 	}

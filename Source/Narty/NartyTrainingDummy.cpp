@@ -43,11 +43,21 @@ float ANartyTrainingDummy::ReceiveStrike(float Damage, AActor* InstigatorActor)
 	return Health ? Health->ApplyDamage(Damage, InstigatorActor) : 0.f;
 }
 
-void ANartyTrainingDummy::SetMaxHealth(float InMaxHealth)
+void ANartyTrainingDummy::SetMaxHealth(float InMaxHealth, bool bFill)
 {
 	if (Health)
 	{
-		Health->SetMaxHealth(InMaxHealth, true);
+		Health->SetMaxHealth(InMaxHealth, bFill);
+		RefreshLabel();
+	}
+}
+
+void ANartyTrainingDummy::SetHealth(float InHealth)
+{
+	if (Health)
+	{
+		Health->SetHealth(InHealth);
+		RefreshLabel();
 	}
 }
 

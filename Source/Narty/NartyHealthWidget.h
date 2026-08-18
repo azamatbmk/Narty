@@ -14,6 +14,7 @@ class NARTY_API UNartyHealthWidget : public UUserWidget
 
 public:
 	void SetHealth(float Health, float MaxHealth);
+	void SetAbilityLine(const FText& Line);
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
@@ -26,4 +27,7 @@ private:
 
 	UPROPERTY()
 	TObjectPtr<UProgressBar> HealthBar;
+
+	UPROPERTY()
+	TObjectPtr<UTextBlock> AbilityText;
 };

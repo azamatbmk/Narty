@@ -68,6 +68,8 @@ void ANartyHeroTrialSite::BeginPlay()
 
 void ANartyHeroTrialSite::ActivateForHero(ENartyHero Hero)
 {
+	ClearTrialDummies();
+
 	ActiveHero = Hero;
 	bActive = true;
 	bEntered = false;
@@ -105,6 +107,166 @@ void ANartyHeroTrialSite::ActivateForHero(ENartyHero Hero)
 
 	AtmosphereLight->SetIntensity(9000.f);
 	UE_LOG(LogTemp, Warning, TEXT("Narty: hero trial activated for hero=%d"), static_cast<int32>(Hero));
+}
+
+void ANartyHeroTrialSite::ClearTrialDummies()
+{
+	for (TObjectPtr<ANartyTrainingDummy>& Dummy : TrialDummies)
+	{
+		if (IsValid(Dummy))
+		{
+			Dummy->Destroy();
+		}
+	}
+	TrialDummies.Empty();
+
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(BatrazCheckHandle);
+	}
+}
+
+void ANartyHeroTrialSite::CaptureSaveState(FNartyTrialSaveState& OutState) const
+{
+	if (!bActive && !bCompleted)
+	{
+		return;
+	}
+
+	OutState.bHasData = true;
+	OutState.bEntered = bEntered;
+	OutState.bAwaitingFinalChoice = bAwaitingFinalChoice;
+	OutState.VisionsSeen = VisionsSeen;
+	OutState.SyrdonDeals = SyrdonDeals;
+	OutState.DummyHealth.Reset();
+	for (const TObjectPtr<ANartyTrainingDummy>& Dummy : TrialDummies)
+	{
+		OutState.DummyHealth.Add(IsValid(Dummy) ? Dummy->GetHealth() : 0.f);
+	}
+}
+
+void ANartyHeroTrialSite::DisableVisionTrigger(int32 VisionIndex)
+{
+	const FName TagName(*FString::Printf(TEXT("Vision_%d"), VisionIndex));
+	for (TObjectPtr<UBoxComponent>& Trigger : VisionTriggers)
+	{
+		if (IsValid(Trigger) && Trigger->ComponentTags.Contains(TagName))
+		{
+			Trigger->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+			return;
+		}
+	}
+}
+
+void ANartyHeroTrialSite::ApplyDummyHealthFromSave(const TArray<float>& HealthValues)
+{
+	for (int32 Index = 0; Index < TrialDummies.Num(); ++Index)
+	{
+		ANartyTrainingDummy* Dummy = TrialDummies[Index].Get();
+		if (!IsValid(Dummy) || !HealthValues.IsValidIndex(Index))
+		{
+			continue;
+		}
+
+		const float SavedHealth = HealthValues[Index];
+		if (SavedHealth <= 0.f)
+		{
+			Dummy->ReceiveStrike(99999.f, this);
+		}
+		else
+		{
+			Dummy->SetMaxHealth(160.f, false);
+			Dummy->SetHealth(SavedHealth);
+		}
+	}
+}
+
+void ANartyHeroTrialSite::ApplyTrialProgress(const FNartyTrialSaveState& State)
+{
+	if (!State.bHasData)
+	{
+		return;
+	}
+
+	bEntered = State.bEntered;
+	bAwaitingFinalChoice = State.bAwaitingFinalChoice;
+	VisionsSeen = State.VisionsSeen;
+	SyrdonDeals = State.SyrdonDeals;
+
+	if (ActiveHero == ENartyHero::Soslan)
+	{
+		for (int32 Index = 0; Index < State.VisionsSeen; ++Index)
+		{
+			DisableVisionTrigger(Index);
+		}
+	}
+	else if (ActiveHero == ENartyHero::Syrdon)
+	{
+		if (State.SyrdonDeals >= 1)
+		{
+			DisableVisionTrigger(10);
+		}
+		if (State.SyrdonDeals >= 2)
+		{
+			DisableVisionTrigger(11);
+		}
+	}
+
+	ApplyDummyHealthFromSave(State.DummyHealth);
+
+	if (bEntered)
+	{
+		if (bAwaitingFinalChoice)
+		{
+			GateLabel->SetText(NSLOCTEXT("Narty", "Trial_ChooseE", "E \u2014 \u0432\u044b\u0431\u043e\u0440"));
+		}
+		else
+		{
+			GateLabel->SetText(NSLOCTEXT("Narty", "Trial_Inside", "\u0418\u0441\u043f\u044b\u0442\u0430\u043d\u0438\u0435"));
+		}
+
+		if (ActiveHero == ENartyHero::Batraz && !bCompleted)
+		{
+			if (UWorld* World = GetWorld())
+			{
+				World->GetTimerManager().SetTimer(
+					BatrazCheckHandle,
+					this,
+					&ANartyHeroTrialSite::CheckBatrazCleared,
+					0.5f,
+					true);
+			}
+		}
+	}
+}
+
+void ANartyHeroTrialSite::RestoreFromSave(
+	ENartyHero Hero, bool bActive, bool bCompletedState, const FNartyTrialSaveState& State)
+{
+	if (Hero == ENartyHero::None)
+	{
+		return;
+	}
+
+	if (bCompletedState)
+	{
+		ActiveHero = Hero;
+		bCompleted = true;
+		bActive = false;
+		bEntered = true;
+		bAwaitingFinalChoice = false;
+		SetActorHiddenInGame(false);
+		SetActorEnableCollision(true);
+		BuildSharedShell();
+		GateLabel->SetText(NSLOCTEXT("Narty", "Trial_Done", "\u041f\u0443\u0442\u044c \u043f\u0440\u043e\u0439\u0434\u0435\u043d"));
+		GateLabel->SetTextRenderColor(FColor(140, 200, 120));
+		AtmosphereLight->SetIntensity(5000.f);
+	}
+	else if (bActive)
+	{
+		ActivateForHero(Hero);
+		ApplyTrialProgress(State);
+	}
 }
 
 void ANartyHeroTrialSite::BuildSharedShell()
