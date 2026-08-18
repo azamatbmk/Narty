@@ -21,11 +21,13 @@ public:
 protected:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
 private:
 	void EnsurePauseInput();
 	void RemovePauseMapping();
 	void HandlePauseStarted();
+	bool ConsumePauseKeyPress(class APlayerController* PC);
 
 	UPROPERTY()
 	TObjectPtr<UInputAction> PauseAction;

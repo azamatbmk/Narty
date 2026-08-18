@@ -16,6 +16,8 @@ class NARTY_API ANartyUaigEnemy : public AActor
 public:
 	ANartyUaigEnemy();
 
+	void ReviveAt(const FVector& Location);
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaSeconds) override;

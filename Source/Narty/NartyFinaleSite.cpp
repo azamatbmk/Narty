@@ -101,9 +101,9 @@ void ANartyFinaleSite::ActivateFinale()
 	UE_LOG(LogTemp, Warning, TEXT("Narty: finale sanctum activated"));
 }
 
-void ANartyFinaleSite::RestoreFromSave(bool bActive, bool bResolvedState)
+void ANartyFinaleSite::RestoreFromSave(bool bInActive, bool bResolvedState)
 {
-	if (bActive)
+	if (bInActive)
 	{
 		ActivateFinale();
 	}
@@ -118,6 +118,30 @@ void ANartyFinaleSite::RestoreFromSave(bool bActive, bool bResolvedState)
 		Label->SetText(NSLOCTEXT("Narty", "Finale_Resolved", "\u041a\u043e\u043d\u0435\u0446 \u043d\u0430\u0440\u0442\u043e\u0432 \u2014 \u043f\u0440\u043e\u0439\u0434\u0435\u043d"));
 		Label->SetTextRenderColor(FColor(180, 200, 140));
 	}
+}
+
+void ANartyFinaleSite::ResetForNewRun()
+{
+	CloseDialogs();
+	bActive = false;
+	bResolved = false;
+	bStorm = false;
+	bAwaitingEndingChoice = false;
+	StormTime = 0.f;
+	InteractingCharacter = nullptr;
+	InsideCharacter = nullptr;
+	if (SkyLight)
+	{
+		SkyLight->SetIntensity(0.f);
+		SkyLight->SetLightColor(FLinearColor(0.7f, 0.55f, 1.f));
+	}
+	if (Label)
+	{
+		Label->SetText(NSLOCTEXT("Narty", "Finale_Idle", "\u0421\u0430\u0442\u0430\u043d\u0430"));
+		Label->SetTextRenderColor(FColor(220, 200, 160));
+	}
+	SetActorHiddenInGame(true);
+	SetActorEnableCollision(false);
 }
 
 void ANartyFinaleSite::BuildSanctum()

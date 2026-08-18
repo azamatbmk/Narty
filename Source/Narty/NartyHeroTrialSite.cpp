@@ -241,7 +241,7 @@ void ANartyHeroTrialSite::ApplyTrialProgress(const FNartyTrialSaveState& State)
 }
 
 void ANartyHeroTrialSite::RestoreFromSave(
-	ENartyHero Hero, bool bActive, bool bCompletedState, const FNartyTrialSaveState& State)
+	ENartyHero Hero, bool bInActive, bool bCompletedState, const FNartyTrialSaveState& State)
 {
 	if (Hero == ENartyHero::None)
 	{
@@ -262,11 +262,49 @@ void ANartyHeroTrialSite::RestoreFromSave(
 		GateLabel->SetTextRenderColor(FColor(140, 200, 120));
 		AtmosphereLight->SetIntensity(5000.f);
 	}
-	else if (bActive)
+	else if (bInActive)
 	{
 		ActivateForHero(Hero);
 		ApplyTrialProgress(State);
 	}
+}
+
+void ANartyHeroTrialSite::ResetForNewRun()
+{
+	CloseAnyDialog();
+	ClearTrialDummies();
+
+	ActiveHero = ENartyHero::None;
+	bActive = false;
+	bEntered = false;
+	bCompleted = false;
+	bDialogOpen = false;
+	bAwaitingFinalChoice = false;
+	VisionsSeen = 0;
+	SyrdonDeals = 0;
+	InteractingCharacter = nullptr;
+	InsideGateCharacter = nullptr;
+
+	for (TObjectPtr<UBoxComponent>& Trigger : VisionTriggers)
+	{
+		if (IsValid(Trigger))
+		{
+			Trigger->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		}
+	}
+
+	if (GateLabel)
+	{
+		GateLabel->SetText(NSLOCTEXT("Narty", "Trial_GateIdle", "\u041f\u0443\u0442\u044c \u0433\u0435\u0440\u043e\u044f"));
+		GateLabel->SetTextRenderColor(FColor(180, 180, 200));
+	}
+	if (AtmosphereLight)
+	{
+		AtmosphereLight->SetIntensity(0.f);
+	}
+
+	SetActorHiddenInGame(true);
+	SetActorEnableCollision(false);
 }
 
 void ANartyHeroTrialSite::BuildSharedShell()
@@ -343,11 +381,23 @@ UStaticMeshComponent* ANartyHeroTrialSite::AddBlock(
 		return nullptr;
 	}
 
+	TArray<UStaticMeshComponent*> ExistingBlocks;
+	GetComponents<UStaticMeshComponent>(ExistingBlocks);
+	for (UStaticMeshComponent* Existing : ExistingBlocks)
+	{
+		if (Existing && Existing->GetFName() == Name)
+		{
+			Existing->SetVisibility(true);
+			Existing->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+			return Existing;
+		}
+	}
+
 	UStaticMeshComponent* Block = NewObject<UStaticMeshComponent>(this, Name);
 	Block->SetupAttachment(Root);
 	Block->SetStaticMesh(CubeMesh);
 	Block->SetRelativeLocation(RelLoc);
-	Block->SetWorldScale3D(Scale);
+	Block->SetRelativeScale3D(Scale);
 	Block->SetCollisionProfileName(TEXT("BlockAll"));
 	Block->RegisterComponent();
 	AddInstanceComponent(Block);
@@ -363,6 +413,18 @@ UStaticMeshComponent* ANartyHeroTrialSite::AddBlock(
 UBoxComponent* ANartyHeroTrialSite::AddTrigger(
 	const FName& Name, const FVector& RelLoc, const FVector& Extent, int32 VisionIndex)
 {
+	TArray<UBoxComponent*> ExistingBoxes;
+	GetComponents<UBoxComponent>(ExistingBoxes);
+	for (UBoxComponent* Existing : ExistingBoxes)
+	{
+		if (Existing && Existing->GetFName() == Name)
+		{
+			Existing->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+			VisionTriggers.AddUnique(Existing);
+			return Existing;
+		}
+	}
+
 	UBoxComponent* Box = NewObject<UBoxComponent>(this, Name);
 	Box->SetupAttachment(Root);
 	Box->SetRelativeLocation(RelLoc);
@@ -571,7 +633,7 @@ void ANartyHeroTrialSite::HandleIntroClosed()
 void ANartyHeroTrialSite::EnterTrial(ACharacter* Character)
 {
 	bEntered = true;
-	const FVector Inside = GetActorLocation() + FVector(250.f, 0.f, 120.f);
+	const FVector Inside = GetActorTransform().TransformPosition(FVector(280.f, 0.f, 90.f));
 	Character->SetActorLocation(Inside, false, nullptr, ETeleportType::TeleportPhysics);
 	GateLabel->SetText(NSLOCTEXT("Narty", "Trial_Inside", "\u0418\u0441\u043f\u044b\u0442\u0430\u043d\u0438\u0435"));
 

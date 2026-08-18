@@ -142,6 +142,25 @@ void UNartyCombatComponent::GrantForgeWeapon()
 	UE_LOG(LogTemp, Warning, TEXT("Narty: forge weapon granted (damage=%.0f)"), AttackDamage);
 }
 
+void UNartyCombatComponent::ResetForNewRun()
+{
+	CancelPendingStrike();
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(AbilityEndHandle);
+	}
+	EndSoslanDash();
+	EndBatrazFortitude();
+	EndSyrdonStealth();
+	bHasForgeWeapon = false;
+	Hero = ENartyHero::None;
+	if (WeaponMesh)
+	{
+		WeaponMesh->DestroyComponent();
+		WeaponMesh = nullptr;
+	}
+}
+
 void UNartyCombatComponent::EnsureWeaponMesh()
 {
 	ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner());

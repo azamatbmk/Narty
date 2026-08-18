@@ -12,7 +12,9 @@
 
 UNartyPauseComponent::UNartyPauseComponent()
 {
-	PrimaryComponentTick.bCanEverTick = false;
+	PrimaryComponentTick.bCanEverTick = true;
+	PrimaryComponentTick.bStartWithTickEnabled = true;
+	PrimaryComponentTick.bTickEvenWhenPaused = true;
 }
 
 UNartyPauseComponent* UNartyPauseComponent::EnsureOn(ACharacter* Character)
@@ -30,12 +32,19 @@ UNartyPauseComponent* UNartyPauseComponent::EnsureOn(ACharacter* Character)
 		Character->AddInstanceComponent(Pause);
 	}
 
+	Character->SetTickableWhenPaused(true);
+	Pause->SetComponentTickEnabled(true);
+	Pause->EnsurePauseInput();
 	return Pause;
 }
 
 void UNartyPauseComponent::BeginPlay()
 {
 	Super::BeginPlay();
+	if (AActor* Owner = GetOwner())
+	{
+		Owner->SetTickableWhenPaused(true);
+	}
 	EnsurePauseInput();
 }
 
@@ -81,8 +90,11 @@ void UNartyPauseComponent::EnsurePauseInput()
 	if (!PauseMappingContext)
 	{
 		PauseMappingContext = NewObject<UInputMappingContext>(this, TEXT("IMC_NartyPause"));
+		PauseMappingContext->MapKey(PauseAction, EKeys::P);
 		PauseMappingContext->MapKey(PauseAction, EKeys::Escape);
+		PauseMappingContext->MapKey(PauseAction, EKeys::Tab);
 		PauseMappingContext->MapKey(PauseAction, EKeys::Gamepad_Special_Right);
+		PauseMappingContext->MapKey(PauseAction, EKeys::Gamepad_Special_Left);
 	}
 
 	ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner());
@@ -97,6 +109,8 @@ void UNartyPauseComponent::EnsurePauseInput()
 		return;
 	}
 
+	PC->SetTickableWhenPaused(true);
+
 	if (!bMappingAdded)
 	{
 		if (ULocalPlayer* LP = PC->GetLocalPlayer())
@@ -104,7 +118,7 @@ void UNartyPauseComponent::EnsurePauseInput()
 			if (UEnhancedInputLocalPlayerSubsystem* Subsystem =
 					ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(LP))
 			{
-				Subsystem->AddMappingContext(PauseMappingContext, 3);
+				Subsystem->AddMappingContext(PauseMappingContext, 10);
 				BoundLocalPlayer = LP;
 				bMappingAdded = true;
 			}
@@ -116,10 +130,10 @@ void UNartyPauseComponent::EnsurePauseInput()
 		return;
 	}
 
-	UInputComponent* IC = OwnerCharacter->InputComponent;
-	if (!IC)
+	UInputComponent* IC = PC->InputComponent;
+	if (!IC && OwnerCharacter)
 	{
-		IC = PC->InputComponent;
+		IC = OwnerCharacter->InputComponent;
 	}
 
 	if (UEnhancedInputComponent* EIC = Cast<UEnhancedInputComponent>(IC))
@@ -127,11 +141,42 @@ void UNartyPauseComponent::EnsurePauseInput()
 		EIC->BindAction(PauseAction, ETriggerEvent::Started, this, &UNartyPauseComponent::HandlePauseStarted);
 		bInputBound = true;
 	}
-	else if (UWorld* World = GetWorld())
+}
+
+bool UNartyPauseComponent::ConsumePauseKeyPress(APlayerController* PC)
+{
+	if (!PC)
 	{
-		World->GetTimerManager().SetTimerForNextTick(
-			FTimerDelegate::CreateUObject(this, &UNartyPauseComponent::EnsurePauseInput));
+		return false;
 	}
+
+	return PC->WasInputKeyJustPressed(EKeys::P)
+		|| PC->WasInputKeyJustPressed(EKeys::Escape)
+		|| PC->WasInputKeyJustPressed(EKeys::Tab)
+		|| PC->WasInputKeyJustPressed(EKeys::Gamepad_Special_Right)
+		|| PC->WasInputKeyJustPressed(EKeys::Pause);
+}
+
+void UNartyPauseComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
+{
+	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+
+	ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner());
+	APlayerController* PC = OwnerCharacter ? Cast<APlayerController>(OwnerCharacter->GetController()) : nullptr;
+	if (!PC)
+	{
+		if (UWorld* World = GetWorld())
+		{
+			PC = World->GetFirstPlayerController();
+		}
+	}
+
+	if (!ConsumePauseKeyPress(PC))
+	{
+		return;
+	}
+
+	HandlePauseStarted();
 }
 
 void UNartyPauseComponent::HandlePauseStarted()

@@ -19,6 +19,10 @@ namespace NartyGorgeLayout
 	inline const FName PlayerStartTag(TEXT("NartyPlayerStart"));
 	inline constexpr float StorySnapRadius = 280.f;
 
+	/** Open floor on the forge road — not inside Grey_Step1. */
+	inline FVector UaigHomeA() { return Origin + FVector(750.f, 200.f, 130.f); }
+	inline FVector UaigHomeB() { return Origin + FVector(880.f, -180.f, 130.f); }
+
 	inline FTransform PlayerStart()
 	{
 		return FTransform(FRotator::ZeroRotator, Origin + FVector(-900.f, 0.f, 120.f));
@@ -117,6 +121,8 @@ namespace NartyGorgeLayout
 	}
 
 	void SpawnMissingStoryActors(UWorld* World);
+	void EnsureSafetyGeometry(UWorld* World);
+	void ResetWorldForNewRun(UWorld* World);
 	void EnsureReadableWorldLighting(UWorld* World);
 	FTransform FindNykhasStart(UWorld* World);
 

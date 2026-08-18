@@ -32,6 +32,7 @@ public:
 
 	void PushInteractTarget(AActor* Interactable);
 	void PopInteractTarget(AActor* Interactable);
+	void ClearFocus();
 
 	void RefreshPrompt();
 

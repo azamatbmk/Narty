@@ -32,6 +32,8 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Narty|Combat")
 	void GrantForgeWeapon();
 
+	void ResetForNewRun();
+
 	UFUNCTION(BlueprintPure, Category = "Narty|Combat")
 	bool HasForgeWeapon() const { return bHasForgeWeapon; }
 

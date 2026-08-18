@@ -25,6 +25,7 @@ public:
 	void ActivateForQuest();
 	int32 CaptureGuardiansAlive() const;
 	void RestoreFromSave(bool bActive, bool bTaken, int32 GuardiansAlive);
+	void ResetForNewRun();
 
 	virtual bool CanNartyInteract() const override;
 	virtual void TryNartyInteract(ACharacter* Character) override;

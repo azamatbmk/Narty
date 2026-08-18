@@ -33,7 +33,7 @@ ANartyForgeActor::ANartyForgeActor()
 
 	InteractTrigger = CreateDefaultSubobject<UBoxComponent>(TEXT("InteractTrigger"));
 	InteractTrigger->SetupAttachment(BaseMesh);
-	InteractTrigger->SetBoxExtent(FVector(180.f, 180.f, 120.f));
+	InteractTrigger->SetBoxExtent(FVector(120.f, 120.f, 100.f));
 	InteractTrigger->SetRelativeLocation(FVector(0.f, 0.f, 80.f));
 	InteractTrigger->SetCollisionProfileName(TEXT("OverlapAllDynamic"));
 
@@ -91,8 +91,11 @@ void ANartyForgeActor::OnForgeOverlap(
 		Interact->PushInteractTarget(this);
 	}
 
-	if (!bDialogOpen)
+	// First greeting only. Walking past the forge toward the mountain fire
+	// must not reopen Kurdalagon every overlap.
+	if (!bDialogOpen && !bWeaponGranted && !bGreetingShown)
 	{
+		bGreetingShown = true;
 		OpenDialog(Character);
 	}
 }
@@ -130,8 +133,25 @@ void ANartyForgeActor::MarkWeaponGranted()
 	}
 
 	bWeaponGranted = true;
+	bGreetingShown = true;
 	Label->SetText(NSLOCTEXT("Narty", "Forge_LabelDone", "\u041a\u0443\u0440\u0434\u0430\u043b\u0430\u0433\u043e\u043d \u2713"));
 	ForgeLight->SetLightColor(FLinearColor(0.3f, 0.85f, 1.f));
+}
+
+void ANartyForgeActor::ResetForNewRun()
+{
+	CloseDialog();
+	bWeaponGranted = false;
+	bGreetingShown = false;
+	InteractingCharacter = nullptr;
+	if (Label)
+	{
+		Label->SetText(NSLOCTEXT("Narty", "Forge_Label", "\u041a\u0443\u0440\u0434\u0430\u043b\u0430\u0433\u043e\u043d"));
+	}
+	if (ForgeLight)
+	{
+		ForgeLight->SetLightColor(FLinearColor(1.f, 0.35f, 0.05f));
+	}
 }
 
 void ANartyForgeActor::TryNartyInteract(ACharacter* Character)
@@ -204,15 +224,15 @@ void ANartyForgeActor::OpenDialog(ACharacter* Character)
 
 	if (DialogWidget)
 	{
-		DialogWidget->SetDialogTexts(
-			NSLOCTEXT("Narty", "Forge_Title", "\u041a\u0443\u0440\u0434\u0430\u043b\u0430\u0433\u043e\u043d"),
-			Body,
-			Accept);
-
 		if (!DialogWidget->IsInViewport())
 		{
 			DialogWidget->AddToViewport(1100);
 		}
+
+		DialogWidget->SetDialogTexts(
+			NSLOCTEXT("Narty", "Forge_Title", "\u041a\u0443\u0440\u0434\u0430\u043b\u0430\u0433\u043e\u043d"),
+			Body,
+			Accept);
 	}
 
 	PC->bShowMouseCursor = true;
@@ -273,8 +293,9 @@ void ANartyForgeActor::HandleDialogAccepted()
 		}
 
 		Combat->GrantForgeWeapon();
-		bWeaponGranted = true;
-		Label->SetText(NSLOCTEXT("Narty", "Forge_LabelDone", "\u041a\u0443\u0440\u0434\u0430\u043b\u0430\u0433\u043e\u043d \u2713"));
+	bWeaponGranted = true;
+	bGreetingShown = true;
+	Label->SetText(NSLOCTEXT("Narty", "Forge_LabelDone", "\u041a\u0443\u0440\u0434\u0430\u043b\u0430\u0433\u043e\u043d \u2713"));
 		ForgeLight->SetLightColor(FLinearColor(0.3f, 0.85f, 1.f));
 
 		if (UNartyGameInstance* GI = Cast<UNartyGameInstance>(UGameplayStatics::GetGameInstance(this)))

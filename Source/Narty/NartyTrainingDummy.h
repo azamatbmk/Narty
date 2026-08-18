@@ -32,6 +32,8 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Narty|Combat")
 	void SetHealth(float InHealth);
 
+	void Revive();
+
 	/** Fired once when health reaches zero. */
 	UPROPERTY(BlueprintAssignable, Category = "Narty|Combat")
 	FOnNartyDummyDefeated OnDefeated;

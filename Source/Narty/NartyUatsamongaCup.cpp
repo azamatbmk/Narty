@@ -118,6 +118,33 @@ void ANartyUatsamongaCup::RestoreFromSave(bool bActive, bool bJudgedState, bool 
 	}
 }
 
+void ANartyUatsamongaCup::ResetForNewRun()
+{
+	CloseDialog();
+	bQuestActive = false;
+	bJudged = false;
+	bBoiling = false;
+	BoilTime = 0.f;
+	InteractingCharacter = nullptr;
+	InsideCharacter = nullptr;
+	if (CupMesh)
+	{
+		CupMesh->SetWorldScale3D(FVector(0.55f, 0.55f, 0.7f));
+	}
+	if (CupLight)
+	{
+		CupLight->SetIntensity(2500.f);
+		CupLight->SetLightColor(FLinearColor(0.7f, 0.75f, 0.85f));
+	}
+	if (Label)
+	{
+		Label->SetText(NSLOCTEXT("Narty", "Cup_Label", "\u0423\u0430\u0446\u0430\u043c\u043e\u043d\u0433\u0430"));
+		Label->SetTextRenderColor(FColor(220, 210, 160));
+	}
+	SetActorHiddenInGame(true);
+	SetActorEnableCollision(false);
+}
+
 void ANartyUatsamongaCup::PlayBoil(bool bBoil)
 {
 	bBoiling = bBoil;

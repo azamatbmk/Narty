@@ -78,15 +78,32 @@ void ANartySettlementHearthActor::CompleteWithFire()
 	HearthLight->SetAttenuationRadius(2200.f);
 }
 
-void ANartySettlementHearthActor::RestoreFromSave(bool bReturnActive, bool bCompleted)
+void ANartySettlementHearthActor::RestoreFromSave(bool bInReturnActive, bool bInCompleted)
 {
-	if (bCompleted)
+	if (bInCompleted)
 	{
 		CompleteWithFire();
 	}
-	else if (bReturnActive)
+	else if (bInReturnActive)
 	{
 		ActivateReturnObjective();
+	}
+}
+
+void ANartySettlementHearthActor::ResetForNewRun()
+{
+	bReturnActive = false;
+	bCompleted = false;
+	if (Label)
+	{
+		Label->SetText(NSLOCTEXT("Narty", "Hearth_Label", "\u041e\u0447\u0430\u0433 \u0441\u0435\u043b\u0435\u043d\u0438\u044f"));
+		Label->SetTextRenderColor(FColor(180, 190, 200));
+	}
+	if (HearthLight)
+	{
+		HearthLight->SetIntensity(1200.f);
+		HearthLight->SetLightColor(FLinearColor(0.35f, 0.4f, 0.45f));
+		HearthLight->SetAttenuationRadius(900.f);
 	}
 }
 

@@ -21,6 +21,7 @@ public:
 	ANartyForgeActor();
 
 	void MarkWeaponGranted();
+	void ResetForNewRun();
 
 	virtual bool CanNartyInteract() const override;
 	virtual void TryNartyInteract(ACharacter* Character) override;
@@ -79,4 +80,5 @@ protected:
 
 	bool bWeaponGranted = false;
 	bool bDialogOpen = false;
+	bool bGreetingShown = false;
 };

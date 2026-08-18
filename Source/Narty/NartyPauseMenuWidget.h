@@ -6,6 +6,7 @@
 
 class UButton;
 class UTextBlock;
+class UVerticalBox;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnNartyPauseResume);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnNartyPauseSave);
@@ -36,6 +37,7 @@ protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void NativeConstruct() override;
 	virtual FReply NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
+	virtual FReply NativeOnPreviewKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
 
 private:
 	void BuildLayout();

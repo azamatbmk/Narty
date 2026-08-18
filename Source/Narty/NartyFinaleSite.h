@@ -25,7 +25,8 @@ public:
 	ANartyFinaleSite();
 
 	void ActivateFinale();
-	void RestoreFromSave(bool bActive, bool bResolved);
+	void RestoreFromSave(bool bInActive, bool bResolved);
+	void ResetForNewRun();
 
 	virtual bool CanNartyInteract() const override;
 	virtual void TryNartyInteract(ACharacter* Character) override;

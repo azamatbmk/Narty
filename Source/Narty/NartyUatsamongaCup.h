@@ -24,6 +24,7 @@ public:
 	void ActivateForQuest();
 	void RestoreFromSave(bool bActive, bool bJudged, bool bToldTruth);
 	void PlayBoil(bool bBoil);
+	void ResetForNewRun();
 	bool HasJudged() const { return bJudged; }
 
 	virtual bool CanNartyInteract() const override;

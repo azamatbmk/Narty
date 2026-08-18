@@ -74,6 +74,23 @@ void ANartyTrainingDummy::HandleHealthChanged(float /*InHealth*/, float /*InMaxH
 	RefreshLabel();
 }
 
+void ANartyTrainingDummy::Revive()
+{
+	SetActorHiddenInGame(false);
+	SetActorEnableCollision(true);
+	if (Mesh)
+	{
+		Mesh->SetVisibility(true);
+		Mesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+		Mesh->SetCollisionProfileName(TEXT("BlockAllDynamic"));
+	}
+	if (Health)
+	{
+		Health->ResetToFull(0.f);
+	}
+	RefreshLabel();
+}
+
 void ANartyTrainingDummy::HandleDied(AActor* /*DeadActor*/, AActor* /*Killer*/)
 {
 	Mesh->SetVisibility(false);

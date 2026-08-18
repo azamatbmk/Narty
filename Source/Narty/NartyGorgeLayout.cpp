@@ -15,7 +15,12 @@
 #include "Components/SkyLightComponent.h"
 #include "Components/ExponentialHeightFogComponent.h"
 #include "GameFramework/PlayerStart.h"
+#include "GameFramework/WorldSettings.h"
 #include "Engine/World.h"
+#include "Engine/StaticMeshActor.h"
+#include "Engine/StaticMesh.h"
+#include "Components/StaticMeshComponent.h"
+#include "Materials/MaterialInstanceDynamic.h"
 
 namespace NartyGorgeLayout
 {
@@ -45,6 +50,163 @@ namespace NartyGorgeLayout
 		return Spawned;
 	}
 
+	void SpawnSafetyBlock(UWorld* World, const FName& Label, const FVector& Location, const FVector& Scale)
+	{
+		if (!World)
+		{
+			return;
+		}
+
+		for (TActorIterator<AStaticMeshActor> It(World); It; ++It)
+		{
+			if (*It && It->ActorHasTag(TEXT("NartySafety"))
+				&& FVector::DistSquared(It->GetActorLocation(), Location) < 2500.f)
+			{
+				return;
+			}
+		}
+
+		UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
+		if (!Cube)
+		{
+			return;
+		}
+
+		FActorSpawnParameters Params;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		AStaticMeshActor* Block = World->SpawnActor<AStaticMeshActor>(Location, FRotator::ZeroRotator, Params);
+		if (!Block)
+		{
+			return;
+		}
+
+		Block->Tags.AddUnique(TEXT("NartySafety"));
+		Block->SetActorScale3D(Scale);
+		UE_LOG(LogTemp, Log, TEXT("Narty: safety floor %s"), *Label.ToString());
+		if (UStaticMeshComponent* Mesh = Block->GetStaticMeshComponent())
+		{
+			Mesh->SetMobility(EComponentMobility::Movable);
+			Mesh->SetStaticMesh(Cube);
+			Mesh->SetCollisionProfileName(TEXT("BlockAll"));
+			if (UMaterialInstanceDynamic* Dyn = Mesh->CreateAndSetMaterialInstanceDynamic(0))
+			{
+				const FLinearColor Tint(0.16f, 0.15f, 0.13f);
+				Dyn->SetVectorParameterValue(TEXT("Color"), Tint);
+				Dyn->SetVectorParameterValue(TEXT("BaseColor"), Tint);
+			}
+		}
+	}
+
+	bool HasMeshLabel(UWorld* World, const TCHAR* Token)
+	{
+		for (TActorIterator<AStaticMeshActor> It(World); It; ++It)
+		{
+			if (*It && It->GetActorNameOrLabel().Contains(Token))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	void EnsureUaigs(UWorld* World)
+	{
+		if (!World)
+		{
+			return;
+		}
+
+		TArray<ANartyUaigEnemy*> All;
+		for (TActorIterator<ANartyUaigEnemy> It(World); It; ++It)
+		{
+			if (*It)
+			{
+				All.Add(*It);
+			}
+		}
+
+		const FVector Homes[] = { UaigHomeA(), UaigHomeB() };
+		constexpr int32 Wanted = 2;
+		FActorSpawnParameters Params;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+		for (int32 Index = 0; Index < Wanted; ++Index)
+		{
+			if (Index < All.Num())
+			{
+				All[Index]->Tags.AddUnique(StoryTag);
+				All[Index]->ReviveAt(Homes[Index]);
+			}
+			else if (ANartyUaigEnemy* Spawned = World->SpawnActor<ANartyUaigEnemy>(
+				ANartyUaigEnemy::StaticClass(), Homes[Index], FRotator(0.f, 180.f, 0.f), Params))
+			{
+				Spawned->Tags.AddUnique(StoryTag);
+				UE_LOG(LogTemp, Warning, TEXT("Narty: spawned missing uaig %d"), Index);
+			}
+		}
+
+		for (int32 Index = Wanted; Index < All.Num(); ++Index)
+		{
+			All[Index]->Destroy();
+		}
+	}
+
+	void EnsureSafetyGeometry(UWorld* World)
+	{
+		if (!World)
+		{
+			return;
+		}
+
+		if (AWorldSettings* Settings = World->GetWorldSettings())
+		{
+			Settings->KillZ = -20000.f;
+		}
+
+		TArray<AActor*> Stale;
+		for (TActorIterator<AStaticMeshActor> It(World); It; ++It)
+		{
+			if (!*It)
+			{
+				continue;
+			}
+
+			if (It->ActorHasTag(TEXT("NartySafety")))
+			{
+				Stale.Add(*It);
+			}
+		}
+		for (AActor* Actor : Stale)
+		{
+			Actor->Destroy();
+		}
+
+		// Side steps onto the fire ledge if the map was never re-populated.
+		if (!HasMeshLabel(World, TEXT("Grey_FireStepR1")))
+		{
+			SpawnSafetyBlock(World, TEXT("Safety_FireStepR1"), Origin + FVector(1380.f, 280.f, 20.f), FVector(5.f, 4.f, 0.6f));
+			SpawnSafetyBlock(World, TEXT("Safety_FireStepR2"), Origin + FVector(1520.f, 280.f, 80.f), FVector(5.f, 4.f, 0.6f));
+			SpawnSafetyBlock(World, TEXT("Safety_FireStepR3"), Origin + FVector(1640.f, 220.f, 130.f), FVector(5.f, 4.f, 0.6f));
+			SpawnSafetyBlock(World, TEXT("Safety_FireStepL1"), Origin + FVector(1380.f, -280.f, 20.f), FVector(5.f, 4.f, 0.6f));
+			SpawnSafetyBlock(World, TEXT("Safety_FireStepL2"), Origin + FVector(1520.f, -280.f, 80.f), FVector(5.f, 4.f, 0.6f));
+			SpawnSafetyBlock(World, TEXT("Safety_FireStepL3"), Origin + FVector(1640.f, -220.f, 130.f), FVector(5.f, 4.f, 0.6f));
+		}
+
+		// Keep hearth / trial paths walkable without deleting canyon walls.
+		if (!HasMeshLabel(World, TEXT("Grey_HearthApron")))
+		{
+			SpawnSafetyBlock(World, TEXT("Safety_HearthApron"), Origin + FVector(-600.f, 500.f, -50.f), FVector(20.f, 20.f, 1.f));
+		}
+		if (!HasMeshLabel(World, TEXT("Grey_TrialPathFloor")))
+		{
+			SpawnSafetyBlock(World, TEXT("Safety_TrialPath"), Origin + FVector(-200.f, 1000.f, -50.f), FVector(16.f, 22.f, 1.f));
+		}
+		if (!HasMeshLabel(World, TEXT("Grey_NykhasJoin")))
+		{
+			SpawnSafetyBlock(World, TEXT("Safety_NykhasJoin"), Origin + FVector(-350.f, 250.f, -50.f), FVector(16.f, 12.f, 1.f));
+		}
+	}
+
 	void SpawnMissingStoryActors(UWorld* World)
 	{
 		if (!World)
@@ -60,7 +222,50 @@ namespace NartyGorgeLayout
 		FindOrSpawnAt<ANartyUatsamongaCup>(World, Origin + FVector(-200.f, 0.f, 50.f), FRotator(0.f, 180.f, 0.f));
 		FindOrSpawnAt<ANartyHeroTrialSite>(World, Origin + FVector(-200.f, 1100.f, 0.f), FRotator(0.f, -90.f, 0.f));
 		FindOrSpawnAt<ANartyFinaleSite>(World, Origin + FVector(-1100.f, -250.f, 40.f), FRotator(0.f, 90.f, 0.f));
-		FindOrSpawnAt<ANartyUaigEnemy>(World, Origin + FVector(1250.f, 80.f, 140.f), FRotator(0.f, 180.f, 0.f));
+		EnsureUaigs(World);
+	}
+
+	void ResetWorldForNewRun(UWorld* World)
+	{
+		if (!World)
+		{
+			return;
+		}
+
+		if (ANartyForgeActor* Forge = GetForge(World))
+		{
+			Forge->ResetForNewRun();
+		}
+		if (ANartyMountainFireActor* Fire = GetMountainFire(World))
+		{
+			Fire->ResetForNewRun();
+		}
+		if (ANartySettlementHearthActor* Hearth = GetHearth(World))
+		{
+			Hearth->ResetForNewRun();
+		}
+		if (ANartyUatsamongaCup* Cup = GetUatsamongaCup(World))
+		{
+			Cup->ResetForNewRun();
+		}
+		if (ANartyHeroTrialSite* Trial = GetHeroTrialSite(World))
+		{
+			Trial->ResetForNewRun();
+		}
+		if (ANartyFinaleSite* Finale = GetFinaleSite(World))
+		{
+			Finale->ResetForNewRun();
+		}
+
+		for (TActorIterator<ANartyTrainingDummy> It(World); It; ++It)
+		{
+			if (*It)
+			{
+				(*It)->Revive();
+			}
+		}
+
+		EnsureUaigs(World);
 	}
 
 	FTransform FindNykhasStart(UWorld* World)

@@ -27,7 +27,8 @@ public:
 
 	void ActivateForHero(ENartyHero Hero);
 	void CaptureSaveState(FNartyTrialSaveState& OutState) const;
-	void RestoreFromSave(ENartyHero Hero, bool bActive, bool bCompleted, const FNartyTrialSaveState& State);
+	void RestoreFromSave(ENartyHero Hero, bool bInActive, bool bCompleted, const FNartyTrialSaveState& State);
+	void ResetForNewRun();
 	FVector GetGateWorldLocation() const;
 
 	virtual bool CanNartyInteract() const override;

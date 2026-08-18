@@ -89,7 +89,16 @@ void UNartyPauseMenuWidget::BuildLayout()
 	Title->SetColorAndOpacity(FSlateColor(FLinearColor(0.92f, 0.86f, 0.7f)));
 	if (UVerticalBoxSlot* TitleSlot = Root->AddChildToVerticalBox(Title))
 	{
-		TitleSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 16.f));
+		TitleSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
+	}
+
+	UTextBlock* Hint = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("Hint"));
+	Hint->SetText(NSLOCTEXT("Narty", "Pause_Hint", "P / Esc"));
+	Hint->SetJustification(ETextJustify::Center);
+	Hint->SetColorAndOpacity(FSlateColor(FLinearColor(0.55f, 0.52f, 0.48f)));
+	if (UVerticalBoxSlot* HintSlot = Root->AddChildToVerticalBox(Hint))
+	{
+		HintSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 16.f));
 	}
 
 	StatusText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("Status"));
@@ -166,9 +175,21 @@ void UNartyPauseMenuWidget::HandleQuit()
 	OnQuit.Broadcast();
 }
 
+FReply UNartyPauseMenuWidget::NativeOnPreviewKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent)
+{
+	const FKey Key = InKeyEvent.GetKey();
+	if (Key == EKeys::Escape || Key == EKeys::P || Key == EKeys::Tab)
+	{
+		OnResume.Broadcast();
+		return FReply::Handled();
+	}
+
+	return Super::NativeOnPreviewKeyDown(InGeometry, InKeyEvent);
+}
+
 FReply UNartyPauseMenuWidget::NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent)
 {
-	if (InKeyEvent.GetKey() == EKeys::Escape)
+	if (InKeyEvent.GetKey() == EKeys::Escape || InKeyEvent.GetKey() == EKeys::P)
 	{
 		OnResume.Broadcast();
 		return FReply::Handled();

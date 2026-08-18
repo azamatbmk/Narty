@@ -116,14 +116,54 @@ void UNartyGameInstance::ResetCampaignState()
 	PendingPlayerRotation = FRotator::ZeroRotator;
 }
 
+void UNartyGameInstance::ResetLocalPlayerForNewRun()
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	APlayerController* PC = World->GetFirstPlayerController();
+	APawn* Pawn = PC ? PC->GetPawn() : nullptr;
+	if (!Pawn)
+	{
+		return;
+	}
+
+	Pawn->SetActorTransform(
+		NartyGorgeLayout::FindNykhasStart(World),
+		false,
+		nullptr,
+		ETeleportType::ResetPhysics);
+
+	if (UNartyCombatComponent* Combat = Pawn->FindComponentByClass<UNartyCombatComponent>())
+	{
+		Combat->ResetForNewRun();
+	}
+	if (UNartyHealthComponent* Health = Pawn->FindComponentByClass<UNartyHealthComponent>())
+	{
+		Health->ResetToFull(0.f);
+	}
+	if (UNartyInteractComponent* Interact = Pawn->FindComponentByClass<UNartyInteractComponent>())
+	{
+		Interact->ClearFocus();
+	}
+
+	Pawn->SetActorScale3D(FVector(1.f));
+}
+
 void UNartyGameInstance::BootstrapGorge()
 {
 	if (UWorld* World = GetWorld())
 	{
 		NartyGorgeLayout::SpawnMissingStoryActors(World);
+		NartyGorgeLayout::EnsureSafetyGeometry(World);
+		NartyGorgeLayout::ResetWorldForNewRun(World);
 		NartyGorgeLayout::EnsureReadableWorldLighting(World);
 	}
 
+	ResetLocalPlayerForNewRun();
 	EnsurePlayerReady();
 	StartFallCatch();
 	ShowHeroSelectMenu();
@@ -152,6 +192,7 @@ void UNartyGameInstance::EnsurePlayerReady()
 	if (ACharacter* Character = Cast<ACharacter>(PC->GetPawn()))
 	{
 		UNartyInteractComponent::EnsureOn(Character);
+		UNartyPauseComponent::EnsureOn(Character);
 	}
 
 	StartFallCatch();
@@ -188,7 +229,7 @@ void UNartyGameInstance::CheckFallenOutOfWorld()
 		return;
 	}
 
-	if (Pawn->GetActorLocation().Z > -150.f)
+	if (Pawn->GetActorLocation().Z > -800.f)
 	{
 		return;
 	}
@@ -215,7 +256,7 @@ FNartyHeroStats UNartyGameInstance::GetStatsForHero(ENartyHero Hero) const
 	{
 	case ENartyHero::Soslan:
 		Stats.MaxWalkSpeed = 700.f;
-		Stats.JumpZVelocity = 750.f;
+		Stats.JumpZVelocity = 920.f;
 		Stats.Tint = FLinearColor(1.f, 0.85f, 0.35f);
 		Stats.MaxHealth = 100.f;
 		Stats.DisplayName = NSLOCTEXT("Narty", "Hero_Soslan", "\u0421\u043e\u0441\u043b\u0430\u043d");
@@ -1317,6 +1358,13 @@ bool UNartyGameInstance::CanOpenPauseMenu() const
 
 void UNartyGameInstance::TogglePauseMenu()
 {
+	const double Now = FPlatformTime::Seconds();
+	if (Now - LastPauseToggleSeconds < 0.2)
+	{
+		return;
+	}
+	LastPauseToggleSeconds = Now;
+
 	if (bPauseMenuOpen)
 	{
 		HidePauseMenu();
@@ -1366,6 +1414,9 @@ void UNartyGameInstance::ShowPauseMenu()
 	}
 
 	bPauseMenuOpen = true;
+	LastPauseToggleSeconds = FPlatformTime::Seconds();
+
+	PC->SetTickableWhenPaused(true);
 
 	if (World)
 	{
@@ -1393,6 +1444,7 @@ void UNartyGameInstance::HidePauseMenu()
 	}
 
 	bPauseMenuOpen = false;
+	LastPauseToggleSeconds = FPlatformTime::Seconds();
 
 	if (UWorld* World = GetWorld())
 	{
@@ -1449,8 +1501,6 @@ void UNartyGameInstance::HandlePauseSave()
 					}
 				}),
 				2.f,
-				false,
-				-1.f,
 				false);
 		}
 	}
@@ -1498,8 +1548,24 @@ void UNartyGameInstance::RestartCampaign()
 		return;
 	}
 
+	UGameplayStatics::SetGamePaused(World, false);
+
+	// PIE often does not actually reload the same map. Reset in place instead.
+	if (World->GetMapName().Contains(TEXT("Lvl_Gorge")))
+	{
+		NartyGorgeLayout::SpawnMissingStoryActors(World);
+		NartyGorgeLayout::EnsureSafetyGeometry(World);
+		NartyGorgeLayout::ResetWorldForNewRun(World);
+		NartyGorgeLayout::EnsureReadableWorldLighting(World);
+		ResetLocalPlayerForNewRun();
+		EnsurePlayerReady();
+		StartFallCatch();
+		ShowHeroSelectMenu();
+		UE_LOG(LogTemp, Warning, TEXT("Narty: campaign restarted in place"));
+		return;
+	}
+
 	bRestartPending = true;
-	// Always reload the Narty gorge map with our GameMode (map WorldSettings + URL).
 	UGameplayStatics::OpenLevel(
 		World,
 		FName(TEXT("/Game/Narty/Lvl_Gorge")),

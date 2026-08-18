@@ -206,6 +206,47 @@ void ANartyMountainFireActor::RestoreFromSave(bool bActive, bool bTaken, int32 G
 	}
 }
 
+void ANartyMountainFireActor::ResetForNewRun()
+{
+	if (BargainWidget)
+	{
+		BargainWidget->RemoveFromParent();
+	}
+	bDialogOpen = false;
+	bQuestActive = false;
+	bFireTaken = false;
+	InteractingCharacter = nullptr;
+	InsideCharacter = nullptr;
+
+	for (TObjectPtr<ANartyTrainingDummy>& Dummy : Guardians)
+	{
+		if (IsValid(Dummy))
+		{
+			Dummy->Destroy();
+		}
+	}
+	Guardians.Empty();
+
+	if (FlameMesh)
+	{
+		FlameMesh->SetVisibility(true);
+		FlameMesh->SetWorldScale3D(FVector(0.45f, 0.45f, 1.1f));
+	}
+	if (FlameLight)
+	{
+		FlameLight->SetVisibility(true);
+		FlameLight->SetIntensity(12000.f);
+		FlameLight->SetLightColor(FLinearColor(1.f, 0.4f, 0.05f));
+	}
+	if (Label)
+	{
+		Label->SetText(NSLOCTEXT("Narty", "Fire_Label", "\u041e\u0433\u043e\u043d\u044c \u0433\u043e\u0440\u044b"));
+	}
+
+	SetActorHiddenInGame(true);
+	SetActorEnableCollision(false);
+}
+
 void ANartyMountainFireActor::OnGuardianDefeated(AActor* /*DestroyedActor*/)
 {
 	if (AreGuardiansDefeated())
@@ -375,16 +416,16 @@ void ANartyMountainFireActor::OpenBargainDialog(ACharacter* Character)
 
 	if (BargainWidget)
 	{
+		if (!BargainWidget->IsInViewport())
+		{
+			BargainWidget->AddToViewport(1200);
+		}
+
 		BargainWidget->SetDialogTexts(
 			NSLOCTEXT("Narty", "Fire_BargainTitle", "\u0421\u0442\u0440\u0430\u0436 \u043e\u0433\u043d\u044f"),
 			NSLOCTEXT("Narty", "Fire_BargainBody",
 				"\u0421\u044b\u0440\u0434\u043e\u043d...\n\u0422\u044b \u043c\u043e\u0436\u0435\u0448\u044c \u0432\u0437\u044f\u0442\u044c \u043e\u0433\u043e\u043d\u044c \u0441\u0438\u043b\u043e\u0439.\n\u0418\u043b\u0438 \u043e\u0431\u043c\u0435\u043d\u044f\u0442\u044c \u0441\u043b\u043e\u0432\u043e \u043d\u0430 \u0436\u0430\u0440."),
 			NSLOCTEXT("Narty", "Fire_BargainAccept", "\u041e\u0431\u043c\u0435\u043d\u044f\u0442\u044c"));
-
-		if (!BargainWidget->IsInViewport())
-		{
-			BargainWidget->AddToViewport(1200);
-		}
 	}
 
 	PC->bShowMouseCursor = true;

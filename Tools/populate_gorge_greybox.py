@@ -112,11 +112,11 @@ def main():
     step = (0.24, 0.21, 0.18)
 
     blocks = [
-        ("Grey_Floor", _rel(0, 0, -50), unreal.Vector(42, 16, 1), floor),
-        ("Grey_WallLeft", _rel(200, -650, 400), unreal.Vector(38, 1.5, 10), wall),
-        ("Grey_WallRightA", _rel(-1050, 650, 400), unreal.Vector(13, 1.5, 10), wall),
-        ("Grey_WallRightB", _rel(1100, 650, 400), unreal.Vector(22, 1.5, 10), wall),
-        ("Grey_WallBack", _rel(-1600, 0, 400), unreal.Vector(1.5, 14, 10), (0.20, 0.18, 0.16)),
+        ("Grey_Floor", _rel(0, 0, -50), unreal.Vector(42, 24, 1), floor),
+        ("Grey_WallLeft", _rel(200, -900, 400), unreal.Vector(38, 1.5, 10), wall),
+        ("Grey_WallRightA", _rel(-1200, 900, 400), unreal.Vector(16, 1.5, 10), wall),
+        ("Grey_WallRightB", _rel(1200, 900, 400), unreal.Vector(24, 1.5, 10), wall),
+        ("Grey_WallBack", _rel(-1600, 0, 400), unreal.Vector(1.5, 18, 10), (0.20, 0.18, 0.16)),
         ("Grey_WallFrontL", _rel(1900, -380, 400), unreal.Vector(1.4, 6, 10), (0.22, 0.20, 0.17)),
         ("Grey_WallFrontR", _rel(1900, 380, 400), unreal.Vector(1.4, 6, 10), (0.22, 0.20, 0.17)),
         ("Grey_RockA", _rel(-400, -280, 80), unreal.Vector(2, 2, 3), rock),
@@ -128,10 +128,16 @@ def main():
         ("Grey_Ledge", _rel(1680, 0, 160), unreal.Vector(8, 10, 0.8), (0.20, 0.18, 0.15)),
         ("Grey_FireRailBack", _rel(2080, 0, 360), unreal.Vector(1.2, 10, 5), wall),
         ("Grey_FireRailRight", _rel(1680, 520, 360), unreal.Vector(8, 1.2, 5), wall),
-        ("Grey_FireRailLeft", _rel(1680, -520, 360), unreal.Vector(8, 1.2, 5), wall),
-        ("Grey_TrialPathFloor", _rel(-200, 780, -50), unreal.Vector(5, 12, 1), (0.17, 0.15, 0.13)),
-        ("Grey_TrialPathWallL", _rel(-420, 780, 250), unreal.Vector(1, 12, 6), (0.22, 0.20, 0.18)),
-        ("Grey_TrialPathWallR", _rel(20, 780, 250), unreal.Vector(1, 12, 6), (0.22, 0.20, 0.18)),
+		("Grey_FireRailLeft", _rel(1680, -520, 360), unreal.Vector(8, 1.2, 5), wall),
+        ("Grey_HearthApron", _rel(-600, 500, -50), unreal.Vector(20, 20, 1), (0.17, 0.15, 0.13)),
+        ("Grey_TrialPathFloor", _rel(-200, 1000, -50), unreal.Vector(16, 22, 1), (0.17, 0.15, 0.13)),
+        ("Grey_NykhasJoin", _rel(-350, 250, -50), unreal.Vector(16, 12, 1), (0.16, 0.14, 0.12)),
+        ("Grey_FireStepR1", _rel(1380, 280, 20), unreal.Vector(5, 4, 0.6), step),
+        ("Grey_FireStepR2", _rel(1520, 280, 80), unreal.Vector(5, 4, 0.6), step),
+        ("Grey_FireStepR3", _rel(1640, 220, 130), unreal.Vector(5, 4, 0.6), step),
+        ("Grey_FireStepL1", _rel(1380, -280, 20), unreal.Vector(5, 4, 0.6), step),
+        ("Grey_FireStepL2", _rel(1520, -280, 80), unreal.Vector(5, 4, 0.6), step),
+        ("Grey_FireStepL3", _rel(1640, -220, 130), unreal.Vector(5, 4, 0.6), step),
         ("Grey_NykhasFloor", _rel(-200, 0, -20), unreal.Vector(6, 6, 0.4), (0.16, 0.14, 0.12)),
     ]
 
@@ -190,7 +196,13 @@ def main():
         (
             "/Script/Narty.NartyUaigEnemy",
             "Story_Uaig",
-            _rel(1250, 80, 140),
+            _rel(750, 200, 130),
+            unreal.Rotator(0, 180, 0),
+        ),
+        (
+            "/Script/Narty.NartyUaigEnemy",
+            "Story_UaigB",
+            _rel(880, -180, 130),
             unreal.Rotator(0, 180, 0),
         ),
     ]
@@ -206,7 +218,8 @@ def main():
         ("Point_HeroTrial", _rel(-200, 1100, 0)),
         ("Point_Finale", _rel(-1100, -250, 40)),
         ("Point_River", _rel(1580, 0, 50)),
-        ("Point_Uaig", _rel(1250, 80, 140)),
+        ("Point_Uaig", _rel(750, 200, 130)),
+        ("Point_UaigB", _rel(880, -180, 130)),
     ]
     for label, loc in points:
         _spawn_point(label, loc)

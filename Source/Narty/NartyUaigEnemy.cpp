@@ -18,12 +18,13 @@ ANartyUaigEnemy::ANartyUaigEnemy()
 	Mesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Mesh"));
 	SetRootComponent(Mesh);
 	Mesh->SetCollisionProfileName(TEXT("Pawn"));
+	Mesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 	Mesh->SetSimulatePhysics(false);
 	Mesh->CanCharacterStepUpOn = ECB_No;
 
 	Label = CreateDefaultSubobject<UTextRenderComponent>(TEXT("Label"));
 	Label->SetupAttachment(Mesh);
-	Label->SetRelativeLocation(FVector(0.f, 0.f, 130.f));
+	Label->SetRelativeLocation(FVector(0.f, 0.f, 200.f));
 	Label->SetHorizontalAlignment(EHTA_Center);
 	Label->SetWorldSize(32.f);
 	Label->SetTextRenderColor(FColor(180, 160, 140));
@@ -97,16 +98,10 @@ void ANartyUaigEnemy::Tick(float DeltaSeconds)
 	const FRotator Face = ToPlayer.Rotation();
 	SetActorRotation(FRotator(0.f, Face.Yaw, 0.f));
 
-	if (!HasLineOfSightTo(Player))
-	{
-		return;
-	}
-
 	if (Distance > AttackRange)
 	{
 		const FVector Step = ToPlayer.GetSafeNormal() * WalkSpeed * DeltaSeconds;
-		FHitResult Hit;
-		SetActorLocation(GetActorLocation() + Step, true, &Hit);
+		SetActorLocation(GetActorLocation() + Step, false);
 	}
 	else
 	{
@@ -164,6 +159,25 @@ void ANartyUaigEnemy::HandleHealthChanged(float InHealth, float /*InMaxHealth*/)
 	{
 		RefreshLabel();
 	}
+}
+
+void ANartyUaigEnemy::ReviveAt(const FVector& Location)
+{
+	LastSmashTime = -100.f;
+	SetActorLocation(Location, false, nullptr, ETeleportType::ResetPhysics);
+	SetActorHiddenInGame(false);
+	SetActorEnableCollision(true);
+	SetActorTickEnabled(true);
+	if (Mesh)
+	{
+		Mesh->SetVisibility(true, true);
+		Mesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+	}
+	if (Health)
+	{
+		Health->ResetToFull(0.f);
+	}
+	RefreshLabel();
 }
 
 void ANartyUaigEnemy::HandleDied(AActor* /*DeadActor*/, AActor* /*Killer*/)

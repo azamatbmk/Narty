@@ -223,6 +223,15 @@ void UNartyInteractComponent::PopInteractTarget(AActor* Interactable)
 	UpdatePrompt();
 }
 
+void UNartyInteractComponent::ClearFocus()
+{
+	InteractFocusStack.Empty();
+	if (IsValid(PromptWidget))
+	{
+		PromptWidget->SetPromptVisible(false);
+	}
+}
+
 void UNartyInteractComponent::HandleInteractStarted()
 {
 	ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner());

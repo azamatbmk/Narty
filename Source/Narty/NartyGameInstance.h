@@ -141,6 +141,7 @@ protected:
 	void ShowEndingScreen(ENartyEnding Ending);
 	void HideEndingScreen();
 	void ResetCampaignState();
+	void ResetLocalPlayerForNewRun();
 	void GetEndingTexts(ENartyEnding Ending, FText& OutTitle, FText& OutBody) const;
 	FText GetHeroFireHint() const;
 	void RespawnPlayerAtNykhas();
@@ -216,6 +217,7 @@ protected:
 	bool bApplyPendingLoadHealth = false;
 	bool bPendingPlayerTransform = false;
 	bool bPauseMenuDelegatesBound = false;
+	double LastPauseToggleSeconds = 0.0;
 	FVector PendingPlayerLocation = FVector::ZeroVector;
 	FRotator PendingPlayerRotation = FRotator::ZeroRotator;
 	int32 PendingFireGuardiansAlive = -1;

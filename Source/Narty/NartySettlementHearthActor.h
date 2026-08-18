@@ -21,7 +21,8 @@ public:
 
 	void ActivateReturnObjective();
 	void CompleteWithFire();
-	void RestoreFromSave(bool bReturnActive, bool bCompleted);
+	void RestoreFromSave(bool bInReturnActive, bool bInCompleted);
+	void ResetForNewRun();
 
 protected:
 	virtual void BeginPlay() override;

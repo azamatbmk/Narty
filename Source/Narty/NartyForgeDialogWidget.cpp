@@ -134,9 +134,18 @@ void UNartyForgeDialogWidget::BuildLayout()
 		CloseSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 	}
 
-	CachedTitle = NSLOCTEXT("Narty", "Forge_TitleDefault", "\u041a\u0443\u0440\u0434\u0430\u043b\u0430\u0433\u043e\u043d");
-	CachedBody = NSLOCTEXT("Narty", "Forge_BodyDefault", "...");
-	CachedAccept = NSLOCTEXT("Narty", "Forge_AcceptDefault", "OK");
+	if (CachedTitle.IsEmpty())
+	{
+		CachedTitle = NSLOCTEXT("Narty", "Forge_TitleDefault", "\u041a\u0443\u0440\u0434\u0430\u043b\u0430\u0433\u043e\u043d");
+	}
+	if (CachedBody.IsEmpty())
+	{
+		CachedBody = NSLOCTEXT("Narty", "Forge_BodyDefault", "...");
+	}
+	if (CachedAccept.IsEmpty())
+	{
+		CachedAccept = NSLOCTEXT("Narty", "Forge_AcceptDefault", "OK");
+	}
 }
 
 void UNartyForgeDialogWidget::HandleAcceptClicked()
